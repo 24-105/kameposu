@@ -607,19 +607,24 @@ body.is-rush #gameCanvas,
 }
 
 .pause-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 4;
+  z-index: 20;
   display: grid;
-  place-items: center;
-  padding: 16px;
+  align-items: start;
+  justify-items: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
   background: rgb(16 32 51 / 44%);
   backdrop-filter: blur(2px);
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .pause-panel {
   display: grid;
-  width: min(300px, 100%);
+  width: min(330px, 100%);
   gap: 12px;
   padding: 16px;
   border: 2px solid rgb(255 255 255 / 78%);
@@ -627,6 +632,10 @@ body.is-rush #gameCanvas,
   background: linear-gradient(180deg, #ffffff, #effaf8);
   box-shadow: 0 18px 42px rgb(16 32 51 / 30%);
   text-align: center;
+}
+
+.pause-overlay button {
+  touch-action: manipulation;
 }
 
 .pause-panel h2 {
@@ -1277,7 +1286,7 @@ body.is-rush #gameCanvas,
 }
 
 .pause-guide .control-mode-switch button {
-  min-height: 30px;
+  min-height: 34px;
   border-color: rgb(21 127 135 / 18%);
   color: var(--muted);
   background: #ffffff;
@@ -1404,7 +1413,7 @@ body.is-rush #gameCanvas,
 
 .item-bar {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 5px;
   padding: 5px;
 }
@@ -1429,7 +1438,7 @@ body.is-rush #gameCanvas,
 
 .stick-pad button {
   min-width: 0;
-  min-height: 38px;
+  min-height: 44px;
   border: 0;
   border-radius: 8px;
   color: #ffffff;
@@ -2002,6 +2011,13 @@ body.is-rush #gameCanvas,
     #80c98d;
 }
 
+.recommend-card-art-night {
+  background:
+    radial-gradient(circle at 70% 26%, #f8e59d 0 5px, transparent 6px),
+    linear-gradient(180deg, rgb(255 255 255 / 34%), rgb(47 40 62 / 26%)),
+    #332a44;
+}
+
 .recommend-bike-icon {
   position: relative;
   width: 37px;
@@ -2059,6 +2075,44 @@ body.is-rush #gameCanvas,
     linear-gradient(#ffffff, #ffffff) 26px 26px / 5px 5px no-repeat,
     #172330;
   box-shadow: 0 2px 0 rgb(23 35 48 / 18%);
+}
+
+.recommend-night-icon {
+  position: relative;
+  width: 28px;
+  height: 34px;
+  border: 3px solid #f7ead0;
+  border-radius: 5px 8px 8px 5px;
+  background:
+    linear-gradient(90deg, rgb(247 234 208 / 44%) 0 4px, transparent 4px),
+    linear-gradient(#f0bf39, #f0bf39) 10px 10px / 10px 3px no-repeat,
+    linear-gradient(#f7ead0, #f7ead0) 9px 18px / 12px 3px no-repeat,
+    #6e3f5b;
+  box-shadow: 0 3px 0 rgb(23 35 48 / 18%);
+}
+
+.recommend-night-icon::before,
+.recommend-night-icon::after {
+  position: absolute;
+  border-radius: 999px;
+  content: "";
+}
+
+.recommend-night-icon::before {
+  top: -8px;
+  right: -9px;
+  width: 12px;
+  height: 12px;
+  background: #f0bf39;
+  box-shadow: -4px 2px 0 #332a44;
+}
+
+.recommend-night-icon::after {
+  left: 7px;
+  bottom: -6px;
+  width: 12px;
+  height: 3px;
+  background: rgb(23 35 48 / 22%);
 }
 
 .recommend-card-copy {
@@ -3196,7 +3250,7 @@ body.is-result-detail-open .result-retry-dock {
   }
 
   .stick-pad button {
-    min-height: 34px;
+    min-height: 40px;
   }
 
   .guide-cues span {
@@ -3274,7 +3328,7 @@ body.is-result-detail-open .result-retry-dock {
   }
 
   .stick-pad button {
-    min-height: 33px;
+    min-height: 40px;
   }
 
   .guide-cues {

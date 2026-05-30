@@ -745,6 +745,7 @@ function pauseRun() {
   activeRun.status = "paused";
   resetInput();
   pauseOverlay.classList.remove("is-hidden");
+  pauseOverlay.scrollTop = 0;
   startButton.disabled = true;
   updateManualItems();
 }
