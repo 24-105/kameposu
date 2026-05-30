@@ -1,11 +1,13 @@
 {
   "name": "かめぽす便",
   "short_name": "かめぽす便",
-  "description": "日替わりの街で荷物を拾って家へ届ける、スマホ向けの無料ブラウザゲームです。",
+  "description": "カメの配達員が日替わりの街でバッグを拾って家へ届ける、スマホ向けの無料ブラウザゲームです。",
   "lang": "ja",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "categories": ["games"],
   "background_color": "#fff8ec",
   "theme_color": "#128994",
   "icons": [

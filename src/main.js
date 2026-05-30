@@ -25,6 +25,7 @@ const CAMERA_TOUCH_Y_ANCHOR = 0.4;
 const CAMERA_TOUCH_X_SHIFT = 0.1;
 const SCORE_KEY = "delivery-panic-session-scores-v1";
 const CONTROL_MODE_KEY = "kameposu-control-mode-v1";
+const BLANK_FAVICON_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 const MAX_CARRY_PACKAGES = 3;
 const MIN_VISIBLE_PACKAGES = 5;
 const BASE_PLAYER_SPEED = 210;
@@ -55,10 +56,18 @@ const SIGNAL_CYCLE_SECONDS = 2.8;
 const SIGNAL_RED_SECONDS = 1.45;
 const RAIL_CYCLE_SECONDS = 4.6;
 const RAIL_CLOSED_SECONDS = 1.65;
+const FESTIVAL_CYCLE_SECONDS = 5.2;
+const FESTIVAL_BUSY_SECONDS = 2.25;
+const RIVER_SPEED_FACTOR = 0.58;
 const TAILWIND_SECONDS = 1.6;
+const SLOPE_BOOST_SECONDS = 1.05;
+const SLOPE_SLOW_SECONDS = 0.75;
 const SHORTCUT_SCORE = 30;
 const SHORTCUT_COOLDOWN_SECONDS = 4.2;
 const SURPRISE_STAND_SCORE = 35;
+const DELIVERY_POST_SCORE = 88;
+const HELI_DELIVERY_SCORE = 105;
+const HELI_DELIVERY_SECONDS = 1.15;
 const MAX_FLOAT_TEXTS = 7;
 const MANUAL_CLOCK_SECONDS = 4.0;
 const SOUND_VOLUME = 0.035;
@@ -108,6 +117,7 @@ const menuTitle = document.querySelector("#menuTitle");
 const menuCloseButton = document.querySelector("#menuCloseButton");
 const menuRankingPanel = document.querySelector("#menuRankingPanel");
 const menuRecommendPanel = document.querySelector("#menuRecommendPanel");
+const recommendCards = [...document.querySelectorAll(".recommend-card[href]")];
 const gameSetScreen = document.querySelector("#gameSetScreen");
 const retryButton = document.querySelector("#retryButton");
 const resultGrade = document.querySelector("#resultGrade");
@@ -465,6 +475,7 @@ setControlMode(controlMode, false);
 updateManualItems();
 updateHud();
 renderRankings();
+loadRecommendCards();
 drawScene();
 renderGuideIcons();
 
@@ -737,6 +748,245 @@ function closeMenuScreen() {
   menuScreen.classList.add("is-hidden");
 }
 
+function loadRecommendCards() {
+  const cardGroups = new Map();
+  recommendCards.forEach((card) => {
+    const image = card.querySelector(".recommend-favicon");
+    if (image) clearRecommendFavicon(image);
+
+    const pageUrl = card.href;
+    if (!pageUrl) return;
+    const group = cardGroups.get(pageUrl) ?? [];
+    group.push(card);
+    cardGroups.set(pageUrl, group);
+  });
+
+  cardGroups.forEach((cards, pageUrl) => {
+    resolveRecommendPageMeta(pageUrl).then((meta) => {
+      cards.forEach((card) => applyRecommendPageMeta(card, meta));
+    });
+  });
+}
+
+async function resolveRecommendPageMeta(pageUrl) {
+  try {
+    const response = await fetchWithTimeout(pageUrl, { cache: "no-cache" }, 4500);
+    if (!response.ok) return null;
+
+    const html = await response.text();
+    const page = new DOMParser().parseFromString(html, "text/html");
+    const baseUrl = response.url || pageUrl;
+    return {
+      iconUrl: resolveRecommendIconUrl(page, baseUrl),
+      title: extractRecommendTitle(page),
+      description: extractRecommendDescription(page),
+      genre: extractRecommendGenre(page),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function resolveRecommendIconUrl(page, baseUrl) {
+  try {
+    const iconLink = findPreferredFaviconLink(page);
+    const href = iconLink?.getAttribute("href")?.trim();
+    if (!href) return "";
+    if (href.startsWith("data:")) return href;
+
+    const iconUrl = new URL(href, baseUrl);
+    iconUrl.searchParams.set("favicon_refresh", String(Date.now()));
+    return iconUrl.href;
+  } catch {
+    return "";
+  }
+}
+
+function extractRecommendTitle(page) {
+  const jsonLd = getJsonLdObjects(page);
+  return (
+    findJsonLdText(jsonLd, ["name"])
+    || getMetaContent(page, [
+      "meta[name='application-name']",
+      "meta[name='apple-mobile-web-app-title']",
+      "meta[property='og:site_name']",
+    ])
+    || stripRecommendTitle(getMetaContent(page, [
+      "meta[property='og:title']",
+      "meta[name='twitter:title']",
+    ]) || page.querySelector("title")?.textContent)
+  );
+}
+
+function extractRecommendDescription(page) {
+  const jsonLd = getJsonLdObjects(page);
+  return pickBriefRecommendText([
+    getMetaContent(page, ["meta[property='og:description']"]),
+    getMetaContent(page, ["meta[name='twitter:description']"]),
+    getMetaContent(page, ["meta[name='description']"]),
+    findJsonLdText(jsonLd, ["description"]),
+  ], 46);
+}
+
+function extractRecommendGenre(page) {
+  const jsonLd = getJsonLdObjects(page);
+  for (const item of jsonLd) {
+    const [genre] = toRecommendTextList(item.genre);
+    if (genre) return genre;
+  }
+  return "";
+}
+
+function applyRecommendPageMeta(card, meta) {
+  const image = card.querySelector(".recommend-favicon");
+  if (image) setRecommendFavicon(image, meta?.iconUrl || "");
+
+  const title = trimRecommendText(meta?.title, 22);
+  const description = trimRecommendText(meta?.description, 46);
+  const genre = trimRecommendText(meta?.genre, 14);
+
+  card.querySelector("em").textContent = genre;
+  card.querySelector("strong").textContent = title;
+  card.querySelector("small").textContent = description;
+  card.classList.toggle("is-empty-meta", !title && !description && !genre);
+
+  card.setAttribute("aria-label", title ? `おすすめゲーム: ${title}` : "おすすめゲーム");
+}
+
+function getMetaContent(page, selectors) {
+  for (const selector of selectors) {
+    const value = page.querySelector(selector)?.getAttribute("content")?.trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+function getJsonLdObjects(page) {
+  const objects = [];
+  page.querySelectorAll("script[type='application/ld+json']").forEach((script) => {
+    try {
+      collectJsonLdObjects(JSON.parse(script.textContent || ""), objects);
+    } catch {
+      // Broken metadata should not break the game.
+    }
+  });
+  return objects;
+}
+
+function collectJsonLdObjects(value, objects) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectJsonLdObjects(item, objects));
+    return;
+  }
+
+  if (!value || typeof value !== "object") return;
+  objects.push(value);
+  if (Array.isArray(value["@graph"])) {
+    value["@graph"].forEach((item) => collectJsonLdObjects(item, objects));
+  }
+}
+
+function findJsonLdText(objects, keys) {
+  for (const object of objects) {
+    for (const key of keys) {
+      const [value] = toRecommendTextList(object[key]);
+      if (value) return value;
+    }
+  }
+  return "";
+}
+
+function toRecommendTextList(value) {
+  if (Array.isArray(value)) return value.flatMap((item) => toRecommendTextList(item));
+  if (typeof value === "string" || typeof value === "number") {
+    const text = normalizeRecommendText(String(value));
+    return text ? [text] : [];
+  }
+  if (value && typeof value === "object") {
+    return toRecommendTextList(value.name);
+  }
+  return [];
+}
+
+function stripRecommendTitle(text, options = {}) {
+  const normalized = normalizeRecommendText(text);
+  if (!normalized) return "";
+  const parts = normalized.split(/\s*[|｜\-–—]\s*/).filter(Boolean);
+  if (options.keepSubtitle && parts.length > 1) return parts.slice(1).join(" ");
+  return parts[0] || normalized;
+}
+
+function pickBriefRecommendText(values, maxLength) {
+  const normalizedValues = values
+    .map((value) => normalizeRecommendText(value))
+    .filter(Boolean);
+  return trimRecommendText(
+    normalizedValues.find((value) => value.length <= maxLength) || normalizedValues[0] || "",
+    maxLength,
+  );
+}
+
+function normalizeRecommendText(text) {
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function trimRecommendText(text, maxLength) {
+  const normalized = normalizeRecommendText(text);
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLength - 1))}…`;
+}
+
+function findPreferredFaviconLink(page) {
+  const links = [...page.querySelectorAll("link[rel][href]")].filter((link) => {
+    const tokens = link.relList ? [...link.relList] : link.rel.toLowerCase().split(/\s+/);
+    return tokens.includes("icon") || tokens.includes("apple-touch-icon");
+  });
+
+  return (
+    links.find((link) => link.type === "image/svg+xml")
+    ?? links.find((link) => {
+      const tokens = link.relList ? [...link.relList] : link.rel.toLowerCase().split(/\s+/);
+      return tokens.includes("icon");
+    })
+    ?? links[0]
+  );
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function setRecommendFavicon(image, iconUrl) {
+  if (!iconUrl) {
+    clearRecommendFavicon(image);
+    return;
+  }
+
+  image.classList.add("is-empty");
+  image.onload = () => {
+    image.classList.remove("is-empty");
+    image.closest(".recommend-card-art")?.classList.remove("is-empty");
+  };
+  image.onerror = () => {
+    clearRecommendFavicon(image);
+  };
+  image.src = iconUrl;
+}
+
+function clearRecommendFavicon(image) {
+  image.onload = null;
+  image.onerror = null;
+  image.classList.add("is-empty");
+  image.src = BLANK_FAVICON_SRC;
+  image.closest(".recommend-card-art")?.classList.add("is-empty");
+}
+
 function pauseRun() {
   if (activeRun.status !== "countdown" && activeRun.status !== "running") return;
 
@@ -821,7 +1071,9 @@ function createFreshRun(status = "countdown") {
     eventCooldowns: createEventCooldowns(),
     rush: 0,
     warp: null,
+    heliDelivery: null,
     invulnerable: 0,
+    riverHintCooldown: 0,
     flash: 0,
     shake: 0,
     shakeDuration: 0,
@@ -894,6 +1146,7 @@ function updateRun(dt) {
   activeRun.slow = Math.max(0, activeRun.slow - dt);
   activeRun.slip = Math.max(0, activeRun.slip - dt);
   activeRun.invulnerable = Math.max(0, activeRun.invulnerable - dt);
+  activeRun.riverHintCooldown = Math.max(0, activeRun.riverHintCooldown - dt);
   activeRun.flash = Math.max(0, activeRun.flash - dt);
   activeRun.shake = Math.max(0, activeRun.shake - dt);
   updateScorePulse(dt);
@@ -909,6 +1162,7 @@ function updateRun(dt) {
     return;
   }
   movePlayer(dt);
+  checkTerrainEffects();
   checkRoadEvents();
   checkPackageAndDestination();
   checkBonusPickup();
@@ -1109,7 +1363,25 @@ function getPlayerSpeed() {
   const lastSpurtBonus = isLastSpurtActive() ? LAST_SPURT_SPEED_BONUS : 0;
   const slowPenalty = activeRun.slow > 0 ? 78 : 0;
   const stunPenalty = activeRun.stunned > 0 ? 999 : 0;
-  return Math.max(0, activeRun.player.speed + comboBonus + rushBonus + flightBonus + lastSpurtBonus - slowPenalty - stunPenalty);
+  const baseSpeed = Math.max(0, activeRun.player.speed + comboBonus + rushBonus + flightBonus + lastSpurtBonus - slowPenalty - stunPenalty);
+  return baseSpeed * getTerrainSpeedFactor();
+}
+
+function getTerrainSpeedFactor() {
+  if (activeRun.flight > 0) return 1;
+  const cell = getPlayerCell(activeRun.player);
+  if (isSlowRiverCell(cell)) return RIVER_SPEED_FACTOR;
+  return 1;
+}
+
+function checkTerrainEffects() {
+  if (activeRun.status !== "running" || activeRun.flight > 0 || activeRun.riverHintCooldown > 0) return;
+
+  const cell = getPlayerCell(activeRun.player);
+  if (!isSlowRiverCell(cell)) return;
+
+  activeRun.riverHintCooldown = 1.6;
+  addFloatText(activeRun.player.x, activeRun.player.y - 34, "川はゆっくり", "#dffcff", 0.72, -22);
 }
 
 function getRushControlSpeedFactor() {
@@ -1198,9 +1470,13 @@ function createEventCooldowns() {
     roadwork: 0,
     rail: 0,
     signal: 0,
+    festival: 0,
+    slope: 0,
     slow: 0,
     shortcut: 0,
     stand: 0,
+    post: 0,
+    heli: 0,
     tailwind: 0,
     electric: 0,
   };
@@ -1701,7 +1977,7 @@ function checkRoadEvents() {
     const distance = distanceToCell(activeRun.player, event.cell);
     if (distance > event.radius) return;
 
-    const isGroundTrap = ["puddle", "crowd", "oil", "rail", "signal", "roadwork", "electric"].includes(event.kind);
+    const isGroundTrap = ["puddle", "crowd", "oil", "rail", "signal", "roadwork", "electric", "festival", "slope"].includes(event.kind);
     if (activeRun.flight > 0 && isGroundTrap) return;
 
     if (event.kind === "puddle" || event.kind === "crowd") {
@@ -1714,8 +1990,23 @@ function checkRoadEvents() {
       return;
     }
 
+    if (event.kind === "slope") {
+      triggerSlope(event);
+      return;
+    }
+
     if (event.kind === "shortcut") {
       triggerShortcut(event);
+      return;
+    }
+
+    if (event.kind === "post") {
+      triggerDeliveryPost(event);
+      return;
+    }
+
+    if (event.kind === "heli") {
+      triggerHeliDelivery(event);
       return;
     }
 
@@ -1741,6 +2032,11 @@ function checkRoadEvents() {
 
     if (event.kind === "signal" && isSignalRed(event)) {
       triggerSignalPenalty(event);
+      return;
+    }
+
+    if (event.kind === "festival" && isFestivalBusy(event)) {
+      triggerFestivalSlowdown(event);
       return;
     }
 
@@ -1776,6 +2072,34 @@ function triggerTailwind(event) {
   vibrate([10, 18]);
 }
 
+function triggerSlope(event) {
+  if (event.cooldown > 0 || activeRun.eventCooldowns.slope > 0) return;
+
+  const input = getInputVector();
+  const moveX = input.active ? input.x : Math.cos(activeRun.player.facing || event.angle || 0);
+  const moveY = input.active ? input.y : Math.sin(activeRun.player.facing || event.angle || 0);
+  const downX = Math.cos(event.angle ?? 0);
+  const downY = Math.sin(event.angle ?? 0);
+  const dot = moveX * downX + moveY * downY;
+  const point = toCanvasPoint(event.cell);
+
+  event.cooldown = 1.35;
+  activeRun.eventCooldowns.slope = 0.5;
+
+  if (dot >= -0.1) {
+    activeRun.rush = Math.max(activeRun.rush, SLOPE_BOOST_SECONDS);
+    awardScore(28, "event");
+    addFloatText(point.x, point.y - 28, "下り坂 +28", "#12d8df", 0.74, -24);
+    createBurst(point.x, point.y, "#12d8df", 8);
+    vibrate(8);
+    return;
+  }
+
+  activeRun.slow = Math.max(activeRun.slow, SLOPE_SLOW_SECONDS);
+  addFloatText(point.x, point.y - 28, "上り坂", "#f0bf39", 0.72, -22);
+  vibrate(6);
+}
+
 function triggerShortcut(event) {
   if (event.cooldown > 0 || activeRun.eventCooldowns.shortcut > 0 || !event.targetCell) return;
 
@@ -1802,6 +2126,95 @@ function triggerShortcut(event) {
   createBurst(target.x, target.y, "#12d8df", 12);
   triggerShake(2.1, 0.18);
   vibrate([12, 14, 12]);
+}
+
+function triggerDeliveryPost(event) {
+  if (event.cooldown > 0 || activeRun.eventCooldowns.post > 0) return;
+
+  const point = toCanvasPoint(event.cell);
+  if (!activeRun.carrying || getCarriedCount() <= 0) {
+    event.cooldown = 1.6;
+    activeRun.eventCooldowns.post = 0.6;
+    addFloatText(point.x, point.y - 28, "バッグをのせてから", "#ffffff", 0.72, -22);
+    return;
+  }
+
+  event.cooldown = 7.5;
+  activeRun.eventCooldowns.post = 0.85;
+  deliverSinglePackageByEvent({
+    baseScore: DELIVERY_POST_SCORE,
+    label: "ポスト便",
+    color: "#f0bf39",
+    point,
+    bonusScale: 0.55,
+  });
+}
+
+function triggerHeliDelivery(event) {
+  if (event.cooldown > 0 || activeRun.eventCooldowns.heli > 0) return;
+
+  const point = toCanvasPoint(event.cell);
+  if (!activeRun.carrying || getCarriedCount() <= 0) {
+    event.cooldown = 1.8;
+    activeRun.eventCooldowns.heli = 0.8;
+    addFloatText(point.x, point.y - 32, "荷物があればヘリ便", "#dffcff", 0.78, -24);
+    return;
+  }
+
+  const destination = toCanvasPoint(currentJob.destination);
+  event.cooldown = 10.5;
+  activeRun.eventCooldowns.heli = 1.1;
+  activeRun.heliDelivery = {
+    from: { x: point.x, y: point.y },
+    to: { x: destination.x, y: destination.y },
+    elapsed: 0,
+    duration: HELI_DELIVERY_SECONDS,
+  };
+  deliverSinglePackageByEvent({
+    baseScore: HELI_DELIVERY_SCORE,
+    label: "ヘリ便",
+    color: "#5e96df",
+    point,
+    bonusScale: 0.7,
+  });
+  addFloatText(destination.x, destination.y - 34, "家へひとっ飛び", "#dffcff", 0.95, -28);
+  createBurst(destination.x, destination.y, "#5e96df", 14);
+}
+
+function deliverSinglePackageByEvent({ baseScore, label, color, point, bonusScale }) {
+  const deliveredPackage = activeRun.carriedPackages.shift();
+  const comboBefore = activeRun.combo;
+  const distance = deliveredPackage?.distance ?? cellDistance(deliveredPackage?.cell ?? getPlayerCell(activeRun.player), currentJob.destination);
+  const distanceBonus = Math.round(distance * 6 * bonusScale);
+  const comboBonus = comboBefore * 24;
+  const total = baseScore + distanceBonus + comboBonus;
+
+  activeRun.deliveries += 1;
+  activeRun.combo += 1;
+  activeRun.maxCombo = Math.max(activeRun.maxCombo, activeRun.combo);
+  activeRun.carrying = getCarriedCount() > 0;
+  currentJob.distance = getCarriedDistanceTotal();
+  if (!activeRun.carrying) {
+    currentJob.pickupAt = null;
+  }
+
+  awardScoreParts([
+    { bucket: "delivery", points: baseScore },
+    { bucket: "distance", points: distanceBonus },
+    { bucket: "combo", points: comboBonus },
+  ]);
+  activeRun.flash = Math.max(activeRun.flash, 0.16);
+  addFloatText(point.x, point.y - 30, `${label} +${total}`, color, 0.9, -28);
+  createBurst(point.x, point.y, color, 13);
+  triggerShake(1.7, 0.15);
+  vibrate([12, 18, 12]);
+  playCue("delivery");
+
+  if (Math.floor(comboBefore / 3) < Math.floor(activeRun.combo / 3)) {
+    activeRun.rush = Math.max(activeRun.rush, RUSH_SECONDS);
+    addFloatText(activeRun.player.x, activeRun.player.y - 62, "追い風", "#12d8df");
+    createBurst(activeRun.player.x, activeRun.player.y, "#12d8df", 14);
+  }
 }
 
 function updateWarp(dt) {
@@ -1930,6 +2343,21 @@ function triggerSignalPenalty(event) {
   triggerShake(2.2, 0.16);
   vibrate([18, 22]);
   playCue("hit");
+}
+
+function triggerFestivalSlowdown(event) {
+  if (event.cooldown > 0 || activeRun.eventCooldowns.festival > 0) return;
+
+  const point = toCanvasPoint(event.cell);
+  event.cooldown = 1.8;
+  activeRun.eventCooldowns.festival = 0.65;
+  activeRun.slow = Math.max(activeRun.slow, 1.15);
+  activeRun.rush = 0;
+  activeRun.combo = Math.max(0, activeRun.combo - 1);
+  awardScore(-25, "penalty");
+  addFloatText(point.x, point.y - 30, "祭り列 -25", "#e85d56", 0.8, -24);
+  triggerShake(2.1, 0.16);
+  vibrate([16, 20]);
 }
 
 function triggerRoadworkPenalty(event) {
@@ -2572,14 +3000,23 @@ function drawMap() {
       const x = col * TILE;
       const y = row * TILE;
 
-      if (map.road[row][col]) {
-        drawRoadTile(col, row, x, y);
+      if (isRiverCell({ col, row }) && !isBridgeCell({ col, row })) {
+        drawRiverTile(col, row, x, y);
+      } else if (map.road[row][col]) {
+        if (isBridgeCell({ col, row })) {
+          drawRiverTile(col, row, x, y);
+          drawBridgeTile(col, row, x, y);
+        } else {
+          drawRoadTile(col, row, x, y);
+        }
         drawRoadMarking(col, row, x, y);
       } else {
         drawBuilding(col, row, x, y);
       }
     }
   }
+
+  drawDiagonalAlleys();
 
   ctx.strokeStyle = "rgb(22 33 47 / 12%)";
   ctx.lineWidth = 5;
@@ -2603,6 +3040,70 @@ function drawRoadTile(col, row, x, y) {
   if (!hasRight) ctx.fillRect(x + TILE - 4, y, 4, TILE);
   if (!hasUp) ctx.fillRect(x, y, TILE, 4);
   if (!hasDown) ctx.fillRect(x, y + TILE - 4, TILE, 4);
+}
+
+function drawRiverTile(col, row, x, y) {
+  const texture = Math.abs(hashString(`river:${map.seed}:${col}:${row}`)) % 4;
+  ctx.fillStyle = "#49aebd";
+  ctx.fillRect(x, y, TILE, TILE);
+  ctx.fillStyle = texture % 2 === 0 ? "rgb(255 255 255 / 10%)" : "rgb(10 76 94 / 10%)";
+  ctx.fillRect(x, y, TILE, TILE);
+
+  ctx.strokeStyle = "rgb(223 252 255 / 42%)";
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.setLineDash([8, 12]);
+  const offset = ((performance.now() / 140) + texture * 5) % 20;
+  if (map.riverOrientation === "horizontal") {
+    for (let line = 9; line < TILE; line += 16) {
+      ctx.beginPath();
+      ctx.moveTo(x - offset, y + line);
+      ctx.lineTo(x + TILE + 8, y + line - 3);
+      ctx.stroke();
+    }
+  } else {
+    for (let line = 9; line < TILE; line += 16) {
+      ctx.beginPath();
+      ctx.moveTo(x + line, y - offset);
+      ctx.lineTo(x + line + 3, y + TILE + 8);
+      ctx.stroke();
+    }
+  }
+  ctx.setLineDash([]);
+}
+
+function drawBridgeTile(col, row, x, y) {
+  const isHorizontalBridge = map.road[row]?.[col - 1] || map.road[row]?.[col + 1];
+
+  ctx.fillStyle = "#645c50";
+  roundedRect(x + 2, y + 2, TILE - 4, TILE - 4, 5);
+  ctx.fill();
+  ctx.fillStyle = "#b8955e";
+  roundedRect(x + 5, y + 5, TILE - 10, TILE - 10, 5);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgb(74 55 36 / 32%)";
+  ctx.lineWidth = 2;
+  if (isHorizontalBridge) {
+    for (let line = y + 10; line < y + TILE - 4; line += 10) {
+      ctx.beginPath();
+      ctx.moveTo(x + 6, line);
+      ctx.lineTo(x + TILE - 6, line);
+      ctx.stroke();
+    }
+  } else {
+    for (let line = x + 10; line < x + TILE - 4; line += 10) {
+      ctx.beginPath();
+      ctx.moveTo(line, y + 6);
+      ctx.lineTo(line, y + TILE - 6);
+      ctx.stroke();
+    }
+  }
+
+  ctx.strokeStyle = "rgb(255 255 255 / 28%)";
+  ctx.lineWidth = 2;
+  roundedRect(x + 5, y + 5, TILE - 10, TILE - 10, 5);
+  ctx.stroke();
 }
 
 function drawRoadMarking(col, row, x, y) {
@@ -2632,6 +3133,41 @@ function drawRoadMarking(col, row, x, y) {
   }
 
   ctx.setLineDash([]);
+}
+
+function drawDiagonalAlleys() {
+  (map.diagonalAlleys ?? []).forEach((alley) => {
+    const from = toCanvasPoint(alley.from);
+    const to = toCanvasPoint(alley.to);
+    const pulse = (Math.sin(performance.now() * 0.008 + alley.cutCell.col) + 1) * 0.5;
+
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgb(20 32 50 / 20%)";
+    ctx.lineWidth = 31;
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#65717b";
+    ctx.lineWidth = 26;
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+
+    ctx.strokeStyle = `rgb(241 215 109 / ${0.48 + pulse * 0.2})`;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([7, 9]);
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  });
 }
 
 function drawBuilding(col, row, x, y) {
@@ -2700,7 +3236,7 @@ function getBuildingCornerRadii(col, row, radius) {
 
 function isRoadOrOutside(row, col) {
   if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return true;
-  return map.road[row][col];
+  return map.road[row][col] || map.river?.[row]?.[col];
 }
 
 function drawTargetRoute() {
@@ -3394,6 +3930,11 @@ function drawRoadEvents() {
       return;
     }
 
+    if (event.kind === "festival") {
+      drawFestivalEvent(event);
+      return;
+    }
+
     if (event.kind === "roadwork") {
       drawRoadworkEvent(event);
       return;
@@ -3401,6 +3942,11 @@ function drawRoadEvents() {
 
     if (event.kind === "tailwind") {
       drawTailwindEvent(event);
+      return;
+    }
+
+    if (event.kind === "slope") {
+      drawSlopeEvent(event);
       return;
     }
 
@@ -3421,6 +3967,16 @@ function drawRoadEvents() {
 
     if (event.kind === "stand") {
       drawStandEvent(event);
+      return;
+    }
+
+    if (event.kind === "post") {
+      drawDeliveryPostEvent(event);
+      return;
+    }
+
+    if (event.kind === "heli") {
+      drawHeliPadEvent(event);
       return;
     }
 
@@ -3545,6 +4101,56 @@ function drawRoadworkEvent(event) {
   ctx.restore();
 }
 
+function drawFestivalEvent(event) {
+  const point = toCanvasPoint(event.cell);
+  const busy = isFestivalBusy(event);
+  const pulse = busy && activeRun.status === "running" ? (Math.sin(performance.now() / 110) + 1) * 0.5 : 0;
+
+  ctx.save();
+  ctx.translate(point.x, point.y);
+  ctx.rotate(event.angle ?? 0);
+  ctx.fillStyle = `rgb(232 93 86 / ${busy ? 0.12 + pulse * 0.07 : 0.04})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, 27 + pulse * 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "rgb(20 32 50 / 16%)";
+  ctx.beginPath();
+  ctx.ellipse(0, 15, 25, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = busy ? "#e85d56" : "#b8955e";
+  roundedRect(-24, -8, 48, 16, 5);
+  ctx.fill();
+  ctx.fillStyle = "#fff2b8";
+  roundedRect(-19, -5, 12, 10, 3);
+  roundedRect(7, -5, 12, 10, 3);
+  ctx.fill();
+  ctx.strokeStyle = "#7c4a00";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-28, 8);
+  ctx.lineTo(28, 8);
+  ctx.stroke();
+
+  drawFestivalLantern(-16, -18, busy);
+  drawFestivalLantern(16, -18, busy);
+  ctx.restore();
+}
+
+function drawFestivalLantern(x, y, busy) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = busy ? "#f0bf39" : "#fff2b8";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 7, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#7c4a00";
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawCone(x, y, scale = 1) {
   ctx.save();
   ctx.translate(x, y);
@@ -3641,6 +4247,41 @@ function drawTailwindEvent(event) {
     ctx.lineTo(6, y - 7);
     ctx.lineTo(9, y);
     ctx.lineTo(6, y + 7);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawSlopeEvent(event) {
+  const point = toCanvasPoint(event.cell);
+  const pulse = (Math.sin(performance.now() / 135) + 1) * 0.5;
+
+  ctx.save();
+  ctx.translate(point.x, point.y);
+  ctx.rotate(event.angle ?? 0);
+  ctx.globalAlpha = event.cooldown > 0 ? 0.45 : 1;
+
+  ctx.fillStyle = `rgb(18 216 223 / ${0.08 + pulse * 0.045})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, 23 + pulse * 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#5d6b57";
+  roundedRect(-22, -15, 44, 30, 7);
+  ctx.fill();
+  ctx.fillStyle = "#9fbd73";
+  roundedRect(-18, -11, 36, 22, 6);
+  ctx.fill();
+
+  ctx.fillStyle = "#ffffff";
+  for (let index = -1; index <= 1; index += 1) {
+    const x = index * 9;
+    ctx.beginPath();
+    ctx.moveTo(x + 8, 0);
+    ctx.lineTo(x - 3, -7);
+    ctx.lineTo(x - 1, 0);
+    ctx.lineTo(x - 3, 7);
     ctx.closePath();
     ctx.fill();
   }
@@ -3758,6 +4399,81 @@ function drawStandEvent(event) {
   roundedRect(-8, 3, 16, 9, 3);
   ctx.fill();
   drawStarCanvasIcon(0, -25, 0.36, "#e3b842");
+  ctx.restore();
+}
+
+function drawDeliveryPostEvent(event) {
+  const point = toCanvasPoint(event.cell);
+  const unavailable = event.cooldown > 0;
+  const pulse = (Math.sin(performance.now() / 160 + point.x) + 1) * 0.5;
+
+  ctx.save();
+  ctx.translate(point.x, point.y);
+  ctx.globalAlpha = unavailable ? 0.42 : 1;
+  ctx.fillStyle = `rgb(240 191 57 / ${0.1 + pulse * 0.06})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, 25 + pulse * 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "rgb(20 32 50 / 16%)";
+  ctx.beginPath();
+  ctx.ellipse(0, 17, 22, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#e85d56";
+  roundedRect(-17, -11, 34, 28, 7);
+  ctx.fill();
+  ctx.fillStyle = "#fff8ec";
+  roundedRect(-12, -5, 24, 7, 3);
+  ctx.fill();
+  ctx.fillStyle = "#172330";
+  roundedRect(-10, 6, 20, 3, 2);
+  ctx.fill();
+  drawPackageCanvasIcon(0, -20, 0.42, "#d9962e");
+  ctx.restore();
+}
+
+function drawHeliPadEvent(event) {
+  const point = toCanvasPoint(event.cell);
+  const unavailable = event.cooldown > 0;
+  const pulse = (Math.sin(performance.now() / 145 + point.y) + 1) * 0.5;
+
+  ctx.save();
+  ctx.translate(point.x, point.y);
+  ctx.globalAlpha = unavailable ? 0.36 : 1;
+  ctx.fillStyle = `rgb(94 150 223 / ${0.12 + pulse * 0.08})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, 29 + pulse * 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#f7faf8";
+  ctx.strokeStyle = "#5e96df";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(0, 0, 20, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle = "#172330";
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-9, -10);
+  ctx.lineTo(-9, 10);
+  ctx.moveTo(9, -10);
+  ctx.lineTo(9, 10);
+  ctx.moveTo(-8, 0);
+  ctx.lineTo(8, 0);
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgb(94 150 223 / 72%)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-26, -24);
+  ctx.lineTo(-11, -18);
+  ctx.moveTo(26, 24);
+  ctx.lineTo(11, 18);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -4402,6 +5118,13 @@ function drawWarpTrail() {
 }
 
 function updateEffects(dt) {
+  if (activeRun.heliDelivery) {
+    activeRun.heliDelivery.elapsed += dt;
+    if (activeRun.heliDelivery.elapsed >= activeRun.heliDelivery.duration) {
+      activeRun.heliDelivery = null;
+    }
+  }
+
   activeRun.floatTexts = activeRun.floatTexts
     .map((item) => ({
       ...item,
@@ -4450,6 +5173,8 @@ function createBurst(x, y, color, count) {
 }
 
 function drawEffects() {
+  drawHeliDeliveryEffect();
+
   activeRun.particles.forEach((particle) => {
     const alpha = clamp(particle.ttl / 0.7, 0, 1);
     ctx.globalAlpha = alpha;
@@ -4474,6 +5199,66 @@ function drawEffects() {
     ctx.fillText(item.text, item.x, item.y);
     ctx.restore();
   });
+}
+
+function drawHeliDeliveryEffect() {
+  const heli = activeRun.heliDelivery;
+  if (!heli) return;
+
+  const ratio = clamp(heli.elapsed / heli.duration, 0, 1);
+  const eased = easeInOutCubic(ratio);
+  const x = heli.from.x + (heli.to.x - heli.from.x) * eased;
+  const y = heli.from.y + (heli.to.y - heli.from.y) * eased - Math.sin(ratio * Math.PI) * 52;
+  const angle = Math.atan2(heli.to.y - heli.from.y, heli.to.x - heli.from.x);
+  const rotor = performance.now() * 0.05;
+
+  ctx.save();
+  ctx.strokeStyle = "rgb(94 150 223 / 52%)";
+  ctx.lineWidth = 4;
+  ctx.setLineDash([8, 9]);
+  ctx.beginPath();
+  ctx.moveTo(heli.from.x, heli.from.y);
+  ctx.quadraticCurveTo((heli.from.x + heli.to.x) / 2, Math.min(heli.from.y, heli.to.y) - 76, heli.to.x, heli.to.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = "rgb(20 32 50 / 22%)";
+  ctx.beginPath();
+  ctx.ellipse(0, 20, 24, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#5e96df";
+  roundedRect(-18, -10, 36, 20, 9);
+  ctx.fill();
+  ctx.fillStyle = "#dffcff";
+  roundedRect(4, -7, 12, 9, 4);
+  ctx.fill();
+  ctx.strokeStyle = "#172330";
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(-18, 0);
+  ctx.lineTo(-30, -6);
+  ctx.moveTo(18, 1);
+  ctx.lineTo(31, 6);
+  ctx.stroke();
+
+  ctx.save();
+  ctx.rotate(rotor);
+  ctx.strokeStyle = "rgb(255 255 255 / 90%)";
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-28, -15);
+  ctx.lineTo(28, -15);
+  ctx.moveTo(0, -37);
+  ctx.lineTo(0, 7);
+  ctx.stroke();
+  ctx.restore();
+
+  drawPackageCanvasIcon(-4, 16, 0.35, "#d9962e");
+  ctx.restore();
 }
 
 function drawStatusText() {
@@ -4654,6 +5439,8 @@ function createDailyMap(dateKey) {
     carveBlockLoop(road, verticals, horizontals, rng);
   }
 
+  const riverFeature = createRiverFeature(road, verticals, horizontals, rng);
+  const diagonalAlleys = createDiagonalAlleys(road, rng, 10);
   const candidates = [];
 
   for (let row = 1; row < ROWS - 1; row += 1) {
@@ -4669,6 +5456,10 @@ function createDailyMap(dateKey) {
   return {
     seed,
     road,
+    river: riverFeature.river,
+    bridges: riverFeature.bridges,
+    riverOrientation: riverFeature.orientation,
+    diagonalAlleys,
     verticals,
     horizontals,
     candidates,
@@ -4683,6 +5474,89 @@ function createLaneChoices(size, step) {
   }
   if (!choices.includes(size - 3)) choices.push(size - 3);
   return choices;
+}
+
+function createEmptyCellGrid() {
+  return Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+}
+
+function createRiverFeature(road, verticals, horizontals, rng) {
+  const river = createEmptyCellGrid();
+  const bridges = createEmptyCellGrid();
+  const orientation = rng() < 0.5 ? "horizontal" : "vertical";
+
+  if (orientation === "horizontal") {
+    const usableRows = Array.from({ length: ROWS - 6 }, (_item, index) => index + 3).filter((row) => !horizontals.includes(row));
+    const row = usableRows[Math.floor(rng() * usableRows.length)] ?? Math.floor(ROWS / 2);
+    for (let col = 0; col < COLS; col += 1) {
+      river[row][col] = true;
+      if (road[row][col]) bridges[row][col] = true;
+    }
+  } else {
+    const usableCols = Array.from({ length: COLS - 6 }, (_item, index) => index + 3).filter((col) => !verticals.includes(col));
+    const col = usableCols[Math.floor(rng() * usableCols.length)] ?? Math.floor(COLS / 2);
+    for (let row = 0; row < ROWS; row += 1) {
+      river[row][col] = true;
+      if (road[row][col]) bridges[row][col] = true;
+    }
+  }
+
+  return { river, bridges, orientation };
+}
+
+function createDiagonalAlleys(road, rng, count) {
+  const candidates = [];
+  const cornerPairs = [
+    {
+      corner: "topRight",
+      from: (col, row) => ({ col, row: row - 1 }),
+      to: (col, row) => ({ col: col + 1, row }),
+    },
+    {
+      corner: "bottomRight",
+      from: (col, row) => ({ col: col + 1, row }),
+      to: (col, row) => ({ col, row: row + 1 }),
+    },
+    {
+      corner: "bottomLeft",
+      from: (col, row) => ({ col, row: row + 1 }),
+      to: (col, row) => ({ col: col - 1, row }),
+    },
+    {
+      corner: "topLeft",
+      from: (col, row) => ({ col: col - 1, row }),
+      to: (col, row) => ({ col, row: row - 1 }),
+    },
+  ];
+
+  for (let row = 1; row < ROWS - 1; row += 1) {
+    for (let col = 1; col < COLS - 1; col += 1) {
+      if (road[row][col]) continue;
+
+      cornerPairs.forEach((pair) => {
+        const from = pair.from(col, row);
+        const to = pair.to(col, row);
+        if (!road[from.row]?.[from.col] || !road[to.row]?.[to.col]) return;
+        candidates.push({
+          id: `alley-${col}-${row}-${pair.corner}`,
+          from,
+          to,
+          cutCell: { col, row },
+          corner: pair.corner,
+        });
+      });
+    }
+  }
+
+  const selected = [];
+  const shuffled = [...candidates].sort(() => rng() - 0.5);
+  shuffled.forEach((alley) => {
+    if (selected.length >= count) return;
+    if (selected.some((item) => cellDistance(item.cutCell, alley.cutCell) < 4)) return;
+    selected.push(alley);
+  });
+
+  return selected;
 }
 
 function carveBranchRoad(road, verticals, horizontals, rng) {
@@ -4818,22 +5692,24 @@ function createRoadEvents(dailyMap, rng, job) {
   const selected = [];
   const avoidCells = [dailyMap.startCell, job.destination, ...getPickupChoices(job).map((choice) => choice.cell)];
   const candidates = dailyMap.candidates.filter((cell) => avoidCells.every((avoidCell) => cellDistance(cell, avoidCell) >= 2));
+  const dryCandidates = candidates.filter((cell) => !dailyMap.river?.[cell.row]?.[cell.col]);
   const intersections = candidates.filter((cell) => isIntersectionCell(dailyMap, cell));
-  const straightLanes = candidates.filter((cell) => isComfortableStraightCell(dailyMap, cell) && !isNearIntersectionCell(dailyMap, cell));
-  const trapLanes = straightLanes.length > 0 ? straightLanes : candidates.filter((cell) => isStraightRoadCell(dailyMap, cell));
-  const easyLanes = trapLanes.length > 0 ? trapLanes : candidates;
+  const dryIntersections = intersections.filter((cell) => !dailyMap.river?.[cell.row]?.[cell.col]);
+  const straightLanes = dryCandidates.filter((cell) => isComfortableStraightCell(dailyMap, cell) && !isNearIntersectionCell(dailyMap, cell));
+  const trapLanes = straightLanes.length > 0 ? straightLanes : dryCandidates.filter((cell) => isStraightRoadCell(dailyMap, cell));
+  const easyLanes = trapLanes.length > 0 ? trapLanes : dryCandidates.length > 0 ? dryCandidates : candidates;
   const tailwindCount = dailyModifier.key === "turbo" ? 5 : 3;
   const electricCount = dailyModifier.key === "shield" ? 3 : 4;
   const roadworkCount = dailyModifier.key === "shield" ? 4 : 5;
 
-  addRoadEvents(list, selected, intersections, rng, avoidCells, "signal", 4, {
+  addRoadEvents(list, selected, dryIntersections, rng, avoidCells, "signal", 4, {
     radius: 23,
     minSpacing: 4,
     extra: () => ({
       phase: rng() * SIGNAL_CYCLE_SECONDS,
     }),
   });
-  addRoadEvents(list, selected, intersections, rng, avoidCells, "rail", 2, {
+  addRoadEvents(list, selected, dryIntersections, rng, avoidCells, "rail", 2, {
     radius: 24,
     minSpacing: 5,
     extra: (cell) => ({
@@ -4868,11 +5744,56 @@ function createRoadEvents(dailyMap, rng, job) {
       angle: getRoadEventAngle(dailyMap, cell, rng),
     }),
   });
+  addRoadEvents(list, selected, easyLanes, rng, avoidCells, "slope", 4, {
+    radius: 30,
+    minSpacing: 4,
+    extra: (cell) => ({
+      angle: getRoadEventAngle(dailyMap, cell, rng),
+    }),
+  });
+  addRoadEvents(list, selected, easyLanes, rng, avoidCells, "festival", 2, {
+    radius: 29,
+    minSpacing: 5,
+    extra: (cell) => ({
+      angle: getRoadAxisAngle(dailyMap, cell, rng),
+      phase: rng() * FESTIVAL_CYCLE_SECONDS,
+    }),
+  });
   addRoadEvents(list, selected, candidates, rng, avoidCells, "stand", 2, {
     radius: 28,
     minSpacing: 5,
   });
-  addShortcutPairs(list, selected, candidates, rng, avoidCells, 2);
+  addRoadEvents(list, selected, dryCandidates, rng, avoidCells, "post", 2, {
+    radius: 27,
+    minSpacing: 6,
+  });
+  addRoadEvents(list, selected, dryCandidates, rng, avoidCells, "heli", 1, {
+    radius: 30,
+    minSpacing: 7,
+  });
+  addShortcutPairs(list, selected, dryCandidates.length > 0 ? dryCandidates : candidates, rng, avoidCells, 2);
+  ensureRoadEventCount(list, selected, easyLanes, rng, avoidCells, "tailwind", Math.min(3, tailwindCount), {
+    radius: 27,
+    minSpacing: 2,
+    extra: (cell) => ({
+      angle: getRoadEventAngle(dailyMap, cell, rng),
+    }),
+  });
+  ensureRoadEventCount(list, selected, easyLanes, rng, avoidCells, "slope", 3, {
+    radius: 30,
+    minSpacing: 2,
+    extra: (cell) => ({
+      angle: getRoadEventAngle(dailyMap, cell, rng),
+    }),
+  });
+  ensureRoadEventCount(list, selected, easyLanes, rng, avoidCells, "festival", 2, {
+    radius: 29,
+    minSpacing: 2,
+    extra: (cell) => ({
+      angle: getRoadAxisAngle(dailyMap, cell, rng),
+      phase: rng() * FESTIVAL_CYCLE_SECONDS,
+    }),
+  });
 
   return list;
 }
@@ -4896,6 +5817,28 @@ function addRoadEvents(list, selected, pool, rng, avoidCells, kind, count, optio
   }
 }
 
+function ensureRoadEventCount(list, selected, pool, rng, avoidCells, kind, count, options) {
+  const source = pool.length > 0 ? pool : map.candidates;
+  let currentCount = list.filter((event) => event.kind === kind).length;
+
+  while (currentCount < count) {
+    const cell = chooseRoadEventCell(source, rng, selected, avoidCells, options.minSpacing ?? 2) ??
+      chooseRelaxedRoadEventCell(source, rng, selected, avoidCells);
+    if (!cell) return;
+
+    selected.push(cell);
+    list.push({
+      id: `${kind}-${currentCount}`,
+      kind,
+      cell,
+      radius: options.radius,
+      cooldown: 0,
+      ...(options.extra?.(cell, currentCount) ?? {}),
+    });
+    currentCount += 1;
+  }
+}
+
 function chooseRoadEventCell(cells, rng, selected, avoidCells, minSpacing) {
   const shuffled = [...cells].sort(() => rng() - 0.5);
   const isUsable = (cell, spacing, avoidDistance) =>
@@ -4907,6 +5850,14 @@ function chooseRoadEventCell(cells, rng, selected, avoidCells, minSpacing) {
     shuffled.find((cell) => isUsable(cell, Math.max(2, minSpacing - 1), 1)) ??
     null
   );
+}
+
+function chooseRelaxedRoadEventCell(cells, rng, selected, avoidCells) {
+  const shuffled = [...cells].sort(() => rng() - 0.5);
+  return shuffled.find((cell) =>
+    selected.every((selectedCell) => cellKey(selectedCell) !== cellKey(cell)) &&
+    avoidCells.every((avoidCell) => cellDistance(cell, avoidCell) >= 1),
+  ) ?? null;
 }
 
 function addShortcutPairs(list, selected, cells, rng, avoidCells, count) {
@@ -5050,6 +6001,14 @@ function getRailProgress(event) {
   return (performance.now() / 1000 + (event.phase ?? 0)) % RAIL_CYCLE_SECONDS;
 }
 
+function isFestivalBusy(event) {
+  return getFestivalProgress(event) < FESTIVAL_BUSY_SECONDS;
+}
+
+function getFestivalProgress(event) {
+  return (performance.now() / 1000 + (event.phase ?? 0)) % FESTIVAL_CYCLE_SECONDS;
+}
+
 function createHazards(dailyMap) {
   const rng = mulberry32(hashString(`${todayKey}:hazards`));
   const colors = ["#c86f66", "#4f8990", "#7970b6", "#c89b38"];
@@ -5140,7 +6099,7 @@ function updateHazards(dt) {
 }
 
 function findRoadRoute(start, goal) {
-  if (!isRoadCell(start) || !isRoadCell(goal)) return [];
+  if (!isRouteCell(start) || !isRouteCell(goal)) return [];
 
   const startKey = cellKey(start);
   const goalKey = cellKey(goal);
@@ -5151,7 +6110,7 @@ function findRoadRoute(start, goal) {
     const cell = queue[index];
     if (cellKey(cell) === goalKey) break;
 
-    getRoadNeighbors(cell).forEach((neighbor) => {
+    getRouteNeighbors(cell).forEach((neighbor) => {
       const key = cellKey(neighbor);
       if (cameFrom.has(key)) return;
       cameFrom.set(key, cell);
@@ -5171,17 +6130,63 @@ function findRoadRoute(start, goal) {
   return route.reverse();
 }
 
+function getRouteNeighbors(cell) {
+  return [
+    ...getRoadNeighbors(cell),
+    ...getDiagonalAlleyNeighbors(cell),
+  ];
+}
+
 function getRoadNeighbors(cell) {
+  if (isDiagonalAlleyCell(cell)) return [];
+
   return [
     { col: cell.col + 1, row: cell.row },
     { col: cell.col - 1, row: cell.row },
     { col: cell.col, row: cell.row + 1 },
     { col: cell.col, row: cell.row - 1 },
-  ].filter(isRoadCell);
+  ].filter(isBaseRouteCell);
 }
 
 function isRoadCell(cell) {
   return cell.row >= 0 && cell.row < ROWS && cell.col >= 0 && cell.col < COLS && map.road[cell.row][cell.col];
+}
+
+function isRouteCell(cell) {
+  return isBaseRouteCell(cell) || isDiagonalAlleyCell(cell);
+}
+
+function isBaseRouteCell(cell) {
+  return isInMap(cell) && (map.road[cell.row][cell.col] || map.river?.[cell.row]?.[cell.col]);
+}
+
+function isRiverCell(cell) {
+  return isInMap(cell) && map.river?.[cell.row]?.[cell.col];
+}
+
+function isBridgeCell(cell) {
+  return isInMap(cell) && map.bridges?.[cell.row]?.[cell.col];
+}
+
+function isSlowRiverCell(cell) {
+  return isRiverCell(cell) && !isBridgeCell(cell);
+}
+
+function isInMap(cell) {
+  return cell && cell.row >= 0 && cell.row < ROWS && cell.col >= 0 && cell.col < COLS;
+}
+
+function isDiagonalAlleyCell(cell) {
+  return (map.diagonalAlleys ?? []).some((alley) => cellKey(alley.cutCell) === cellKey(cell));
+}
+
+function getDiagonalAlleyNeighbors(cell) {
+  return (map.diagonalAlleys ?? []).flatMap((alley) => {
+    if (cellKey(alley.cutCell) === cellKey(cell)) return [alley.from, alley.to];
+    if (cellKey(alley.from) === cellKey(cell)) return [alley.to];
+    if (cellKey(alley.to) === cellKey(cell)) return [alley.from];
+    return [];
+  });
 }
 
 function getCurrentTarget() {
@@ -5402,7 +6407,17 @@ function isRoadAtPoint(pointX, pointY) {
   const row = Math.floor(pointY / TILE);
   if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return false;
   if (map.road[row][col]) return true;
+  if (map.river?.[row]?.[col]) return true;
+  if (isInsideDiagonalAlley(pointX, pointY)) return true;
   return isInsideRoundedBuildingCutout(pointX, pointY, col, row);
+}
+
+function isInsideDiagonalAlley(pointX, pointY) {
+  return (map.diagonalAlleys ?? []).some((alley) => {
+    const from = toCanvasPoint(alley.from);
+    const to = toCanvasPoint(alley.to);
+    return distanceToSegment(pointX, pointY, from.x, from.y, to.x, to.y) <= 15;
+  });
 }
 
 function isInsideRoundedBuildingCutout(pointX, pointY, col, row) {
@@ -5467,6 +6482,18 @@ function cellKey(cell) {
 
 function cellDistance(a, b) {
   return Math.abs(a.col - b.col) + Math.abs(a.row - b.row);
+}
+
+function distanceToSegment(pointX, pointY, startX, startY, endX, endY) {
+  const dx = endX - startX;
+  const dy = endY - startY;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return Math.hypot(pointX - startX, pointY - startY);
+
+  const t = clamp(((pointX - startX) * dx + (pointY - startY) * dy) / lengthSquared, 0, 1);
+  const projectionX = startX + dx * t;
+  const projectionY = startY + dy * t;
+  return Math.hypot(pointX - projectionX, pointY - projectionY);
 }
 
 function renderRankings() {
