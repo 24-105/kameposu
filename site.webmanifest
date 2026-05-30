@@ -1,0 +1,19 @@
+{
+  "name": "かめぽす便",
+  "short_name": "かめぽす便",
+  "description": "日替わりの街で荷物を拾って家へ届ける、スマホ向けの無料ブラウザゲームです。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fff8ec",
+  "theme_color": "#128994",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="index,follow" />
+    <meta name="theme-color" content="#128994" />
+    <meta name="application-name" content="かめぽす便" />
+    <meta name="apple-mobile-web-app-title" content="かめぽす便" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta
+      name="description"
+      content="かめぽす便は、日替わりの街で荷物を拾って家へ届ける無料ブラウザゲームです。1分で遊べるスマホ向けの配達アクションです。"
+    />
+    <meta property="og:locale" content="ja_JP" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="かめぽす便" />
+    <meta property="og:title" content="かめぽす便 - 1分で遊べる配達ゲーム" />
+    <meta
+      property="og:description"
+      content="日替わりの街で荷物を拾って家へ届ける、スマホ向けの無料ブラウザゲーム。ログインなしですぐ遊べます。"
+    />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="かめぽす便 - 1分で遊べる配達ゲーム" />
+    <meta
+      name="twitter:description"
+      content="日替わりの街で荷物を拾って家へ届ける、スマホ向けの無料ブラウザゲーム。"
+    />
+    <title>かめぽす便 - 1分で遊べる配達ゲーム</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <link rel="stylesheet" href="./src/styles.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "かめぽす便",
+        "alternateName": "かめぽす便 - 1分で遊べる配達ゲーム",
+        "description": "日替わりの街で荷物を拾って家へ届ける、スマホ向けの無料ブラウザゲームです。",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "ブラウザ",
+        "inLanguage": "ja",
+        "genre": ["配達ゲーム", "アクションゲーム", "ブラウザゲーム"],
+        "playMode": "SinglePlayer",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "JPY"
+        }
+      }
+    </script>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-HR4RD542JC"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+
+      gtag("config", "G-HR4RD542JC");
+    </script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="game-column" aria-label="かめぽす便">
+        <header class="top-bar">
+          <div>
+            <h1>かめぽす便</h1>
+            <p id="dateLabel" class="date-label"></p>
+          </div>
+          <div class="top-actions">
+            <button id="startButton" class="primary-button" type="button">
+              開始
+            </button>
+          </div>
+        </header>
+
+        <div class="hud" aria-label="ゲーム状況">
+          <div class="time-card">
+            <span>残り</span>
+            <strong id="timeValue">60.0</strong>
+            <small id="timePhase" class="time-phase" aria-hidden="true"></small>
+            <div id="timeGauge" class="time-gauge" aria-hidden="true">
+              <i></i>
+            </div>
+          </div>
+          <div class="score-card">
+            <span>スコア</span>
+            <strong id="scoreValue">0</strong>
+            <small id="scoreGoal" class="score-goal" aria-hidden="true"></small>
+            <small
+              id="scoreDelta"
+              class="score-delta"
+              aria-hidden="true"
+            ></small>
+          </div>
+          <div>
+            <span>配達</span>
+            <strong id="deliveryValue">0</strong>
+          </div>
+          <div class="combo-card">
+            <span>連続</span>
+            <strong id="comboValue">0</strong>
+            <div id="comboMeter" class="combo-meter" aria-hidden="true">
+              <i></i>
+              <i></i>
+              <i></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="canvas-wrap">
+          <canvas
+            id="gameCanvas"
+            width="420"
+            height="400"
+            aria-label="かめぽす便のゲーム画面"
+          >
+            かめぽす便は、日替わりの街で荷物を拾って家へ届ける1分間の無料ブラウザゲームです。
+          </canvas>
+          <div id="startGuide" class="start-guide" aria-live="polite">
+            <strong>線の先へ進む</strong>
+            <div class="guide-flow" aria-label="荷物を拾って家に届ける">
+              <span class="guide-token guide-token-pickup"
+                ><canvas
+                  class="guide-symbol-canvas"
+                  data-guide-icon="package"
+                  width="46"
+                  height="46"
+                  aria-hidden="true"
+                ></canvas
+                ><em>荷物を拾う</em></span
+              >
+              <i aria-hidden="true">→</i>
+              <span class="guide-token guide-token-destination"
+                ><canvas
+                  class="guide-symbol-canvas"
+                  data-guide-icon="destination"
+                  width="46"
+                  height="46"
+                  aria-hidden="true"
+                ></canvas
+                ><em>家に届ける</em></span
+              >
+            </div>
+            <small>黄色の線は荷物へ、赤の線は家へ続きます</small>
+            <small>道をなぞって移動</small>
+            <div class="guide-actions">
+              <button
+                id="homeRankingButton"
+                class="guide-action guide-action-ranking"
+                type="button"
+              >
+                ランキング
+              </button>
+              <button
+                id="recommendButton"
+                class="guide-action guide-action-recommend"
+                type="button"
+              >
+                おすすめ
+              </button>
+            </div>
+          </div>
+          <div id="countdownOverlay" class="countdown-overlay is-hidden"></div>
+          <div
+            id="pauseOverlay"
+            class="pause-overlay is-hidden"
+            aria-live="polite"
+          >
+            <div class="pause-panel">
+              <h2>一時停止</h2>
+              <div class="pause-guide" aria-label="ルール説明">
+                <strong>線の先へ進む</strong>
+                <div class="guide-flow" aria-label="荷物を拾って家に届ける">
+                  <span class="guide-token guide-token-pickup"
+                    ><canvas
+                      class="guide-symbol-canvas"
+                      data-guide-icon="package"
+                      width="46"
+                      height="46"
+                      aria-hidden="true"
+                    ></canvas
+                    ><em>拾う</em></span
+                  >
+                  <i aria-hidden="true">→</i>
+                  <span class="guide-token guide-token-destination"
+                    ><canvas
+                      class="guide-symbol-canvas"
+                      data-guide-icon="destination"
+                      width="46"
+                      height="46"
+                      aria-hidden="true"
+                    ></canvas
+                    ><em>届ける</em></span
+                  >
+                </div>
+                <small>黄色の線は荷物へ、赤の線は家へ続きます</small>
+              </div>
+              <div class="pause-actions">
+                <button id="resumeButton" class="primary-button" type="button">
+                  再開
+                </button>
+                <button
+                  id="pauseRetryButton"
+                  class="secondary-button"
+                  type="button"
+                >
+                  もう一度
+                </button>
+              </div>
+              <div class="pause-menu-actions" aria-label="一時停止中のメニュー">
+                <button
+                  id="pauseRankingButton"
+                  class="guide-action guide-action-ranking"
+                  type="button"
+                >
+                  <span class="pause-action-label">ランキング</span>
+                </button>
+                <button
+                  id="pauseRecommendButton"
+                  class="guide-action guide-action-recommend"
+                  type="button"
+                >
+                  <span class="pause-action-label">おすすめ</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="itemBar" class="item-bar" aria-label="手持ちアイテム">
+          <button
+            class="item-button"
+            type="button"
+            data-manual-item="clock"
+            aria-label="時計を使う"
+            disabled
+          >
+            <span class="item-icon item-icon-clock" aria-hidden="true"></span>
+            <span>時計</span>
+            <strong data-item-count>1</strong>
+          </button>
+          <button
+            class="item-button"
+            type="button"
+            data-manual-item="shield"
+            aria-label="シールドを使う"
+            disabled
+          >
+            <span class="item-icon item-icon-shield" aria-hidden="true"></span>
+            <span>シールド</span>
+            <strong data-item-count>1</strong>
+          </button>
+          <button
+            class="item-button"
+            type="button"
+            data-manual-item="magnet"
+            aria-label="マグネットを使う"
+            disabled
+          >
+            <span class="item-icon item-icon-magnet" aria-hidden="true"></span>
+            <span>マグネット</span>
+            <strong data-item-count>1</strong>
+          </button>
+          <button
+            class="item-button"
+            type="button"
+            data-manual-item="turbo"
+            aria-label="ターボを使う"
+            disabled
+          >
+            <span class="item-icon item-icon-bolt" aria-hidden="true"></span>
+            <span>ターボ</span>
+            <strong data-item-count>1</strong>
+          </button>
+          <button
+            class="item-button"
+            type="button"
+            data-manual-item="flight"
+            aria-label="飛行を使う"
+            disabled
+          >
+            <span class="item-icon item-icon-flight" aria-hidden="true"></span>
+            <span>飛行</span>
+            <strong data-item-count>0</strong>
+          </button>
+        </div>
+      </section>
+
+      <section id="menuScreen" class="menu-screen is-hidden" aria-live="polite">
+        <div class="menu-panel">
+          <div class="menu-heading">
+            <h2 id="menuTitle">ランキング</h2>
+            <button
+              id="menuCloseButton"
+              class="secondary-button menu-close-button"
+              type="button"
+            >
+              戻る
+            </button>
+          </div>
+
+          <div id="menuRankingPanel" class="menu-content">
+            <section class="ranking-block">
+              <div class="section-heading">
+                <h2>今日のランキング</h2>
+              </div>
+              <ol id="homeTodayRanking" class="ranking-list"></ol>
+            </section>
+
+            <section class="ranking-block">
+              <div class="section-heading">
+                <h2>今週の1位</h2>
+              </div>
+              <div id="homeWeekRanking" class="week-list"></div>
+            </section>
+          </div>
+
+          <div id="menuRecommendPanel" class="menu-content" hidden>
+            <section class="recommend-block" aria-label="おすすめのゲーム">
+              <div class="recommend-heading">
+                <span>次に遊ぶ</span>
+                <strong>スマホで遊べる</strong>
+              </div>
+              <div class="recommend-list">
+                <a
+                  class="recommend-card"
+                  href="https://24-105.github.io/classic-single-obstacle-ride/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="おすすめゲーム: 自転車ダッシュ"
+                >
+                  <span class="recommend-card-art" aria-hidden="true">
+                    <span class="recommend-bike-icon"></span>
+                  </span>
+                  <span class="recommend-card-copy">
+                    <em>3D障害物回避</em>
+                    <strong>自転車ダッシュ</strong>
+                    <small>左右移動とジャンプで障害物を避ける</small>
+                  </span>
+                  <b aria-hidden="true">遊ぶ</b>
+                </a>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="gameSetScreen"
+        class="game-set-screen is-hidden"
+        aria-live="polite"
+      >
+        <div class="game-set-panel">
+          <div class="game-set-heading">
+            <div>
+              <div class="result-headline">
+                <h2>配達完了</h2>
+                <strong id="resultGrade" class="result-grade grade-d"
+                  ><span>ランク</span><b>D</b></strong
+                >
+              </div>
+              <div class="result-name-line">
+                <span>配達員名</span>
+                <strong id="resultName">-</strong>
+              </div>
+              <span id="resultBestBadge" class="result-best-badge is-hidden"
+                >自己最高更新</span
+              >
+            </div>
+          </div>
+
+          <div class="result-insight">
+            <div>
+              <span>今日の順位</span>
+              <strong id="resultRank">-</strong>
+            </div>
+            <div class="result-score-hero">
+              <span>スコア</span>
+              <strong id="resultScoreHero">0</strong>
+            </div>
+            <p id="resultGap">-</p>
+          </div>
+
+          <p id="resultTip" class="result-tip">-</p>
+
+          <div class="result-retry-dock">
+            <button
+              id="retryButton"
+              class="primary-button retry-dock-button"
+              type="button"
+            >
+              もう一度
+            </button>
+          </div>
+
+          <div class="result-tabs" role="tablist" aria-label="結果表示">
+            <button
+              id="resultTabSummary"
+              class="result-tab is-active"
+              type="button"
+              role="tab"
+              data-result-tab="summary"
+              aria-selected="true"
+              aria-controls="resultSummaryPanel"
+            >
+              結果
+            </button>
+            <button
+              id="resultTabRanking"
+              class="result-tab"
+              type="button"
+              role="tab"
+              data-result-tab="ranking"
+              aria-selected="false"
+              aria-controls="resultRankingPanel"
+            >
+              ランキング
+            </button>
+          </div>
+
+          <section
+            id="resultSummaryPanel"
+            class="result-tab-panel"
+            role="tabpanel"
+            aria-labelledby="resultTabSummary"
+          >
+            <div
+              id="resultHighlights"
+              class="highlight-strip"
+              aria-label="今回の見どころ"
+            ></div>
+            <div
+              id="resultMedals"
+              class="medal-strip"
+              aria-label="今回の勲章"
+            ></div>
+
+            <button
+              id="resultDetailToggle"
+              class="detail-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="resultDetailPanel"
+            >
+              詳細を開く
+            </button>
+
+            <div id="resultDetailPanel" class="detail-panel" hidden>
+              <div class="best-strip">
+                <div>
+                  <span>この端末の最高スコア</span>
+                  <strong id="resultSessionBest">0</strong>
+                </div>
+                <div>
+                  <span id="resultBestDeltaLabel">自己最高まで</span>
+                  <strong id="resultBestDelta">-</strong>
+                </div>
+              </div>
+
+              <div class="result-divider">
+                <span>次の一手</span>
+              </div>
+
+              <div
+                id="resultNextMoves"
+                class="retry-cues"
+                aria-label="次回の狙い"
+              ></div>
+
+              <div
+                id="resultBreakdown"
+                class="score-breakdown"
+                aria-label="スコア内訳"
+              ></div>
+
+              <div class="result-grid">
+                <div>
+                  <span>届けた数</span>
+                  <strong id="resultDeliveries">0</strong>
+                </div>
+                <div>
+                  <span>連続成功</span>
+                  <strong id="resultCombo">0</strong>
+                </div>
+                <div>
+                  <span>時計</span>
+                  <strong id="resultItemClock">0</strong>
+                </div>
+                <div>
+                  <span>シールド</span>
+                  <strong id="resultItemShield">0</strong>
+                </div>
+                <div>
+                  <span>マグネット</span>
+                  <strong id="resultItemMagnet">0</strong>
+                </div>
+                <div>
+                  <span>ターボ</span>
+                  <strong id="resultItemTurbo">0</strong>
+                </div>
+                <div>
+                  <span>飛行</span>
+                  <strong id="resultItemFlight">0</strong>
+                </div>
+                <div>
+                  <span>星</span>
+                  <strong id="resultItemStar">0</strong>
+                </div>
+                <div>
+                  <span>ぶつかった数</span>
+                  <strong id="resultCollisions">0</strong>
+                </div>
+                <div>
+                  <span>すれすれ回避</span>
+                  <strong id="resultNearMisses">0</strong>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="resultRankingPanel"
+            class="result-tab-panel"
+            role="tabpanel"
+            aria-labelledby="resultTabRanking"
+            hidden
+          >
+            <section class="ranking-block">
+              <div class="section-heading">
+                <h2>今日のランキング</h2>
+              </div>
+              <ol id="todayRanking" class="ranking-list"></ol>
+            </section>
+
+            <section class="ranking-block">
+              <div class="section-heading">
+                <h2>今週の1位</h2>
+              </div>
+              <div id="weekRanking" class="week-list"></div>
+            </section>
+          </section>
+
+          <section
+            class="recommend-block result-recommend-block"
+            aria-label="おすすめのゲーム"
+          >
+            <div class="recommend-heading">
+              <span>次に遊ぶ</span>
+              <strong>スマホで遊べる</strong>
+            </div>
+            <div class="recommend-list">
+              <a
+                class="recommend-card"
+                href="https://24-105.github.io/classic-single-obstacle-ride/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="おすすめゲーム: 自転車ダッシュ"
+              >
+                <span class="recommend-card-art" aria-hidden="true">
+                  <span class="recommend-bike-icon"></span>
+                </span>
+                <span class="recommend-card-copy">
+                  <em>3D障害物回避</em>
+                  <strong>自転車ダッシュ</strong>
+                  <small>左右移動とジャンプで障害物を避ける</small>
+                </span>
+                <b aria-hidden="true">遊ぶ</b>
+              </a>
+            </div>
+          </section>
+
+          <p class="thanks-card">
+            <span>また配達しに来てね。</span>
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script defer src="./src/main.js"></script>
+  </body>
+</html>
