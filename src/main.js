@@ -4,14 +4,27 @@ const START_COUNTDOWN_MS = COUNTDOWN_STEP_MS * 4;
 const RETRY_COUNTDOWN_MS = START_COUNTDOWN_MS;
 const FINISH_ANNOUNCE_MS = 2200;
 const WARP_SECONDS = 0.55;
-const LAST_SPURT_SECONDS = 5;
+const SECOND_HALF_SECONDS = 30;
+const LAST_SPURT_SECONDS = 12;
 const COLS = 38;
 const ROWS = 28;
 const TILE = 40;
 const WORLD_WIDTH = COLS * TILE;
 const WORLD_HEIGHT = ROWS * TILE;
 const PLAYER_RADIUS = 10;
+const COLLISION_RADIUS_SCALE = 0.58;
+const RUSH_COLLISION_RADIUS_SCALE = 0.5;
+const BUILDING_CORNER_RADIUS = 13;
+const MAX_MOVE_STEP_PIXELS = 4.8;
+const TOUCH_DEADZONE_PIXELS = 9;
+const TOUCH_FULL_TILT_PIXELS = 58;
+const INPUT_AXIS_SNAP_RATIO = 2.15;
+const CAMERA_IDLE_Y_ANCHOR = 0.28;
+const CAMERA_DEFAULT_Y_ANCHOR = 0.54;
+const CAMERA_TOUCH_Y_ANCHOR = 0.4;
+const CAMERA_TOUCH_X_SHIFT = 0.1;
 const SCORE_KEY = "delivery-panic-session-scores-v1";
+const CONTROL_MODE_KEY = "kameposu-control-mode-v1";
 const MAX_CARRY_PACKAGES = 3;
 const MIN_VISIBLE_PACKAGES = 5;
 const BASE_PLAYER_SPEED = 210;
@@ -48,6 +61,7 @@ const SHORTCUT_COOLDOWN_SECONDS = 4.2;
 const SURPRISE_STAND_SCORE = 35;
 const MAX_FLOAT_TEXTS = 7;
 const MANUAL_CLOCK_SECONDS = 4.0;
+const SOUND_VOLUME = 0.035;
 const MANUAL_ITEM_STARTING_STOCK = {
   clock: 1,
   shield: 1,
@@ -86,6 +100,8 @@ const pauseRecommendButton = document.querySelector("#pauseRecommendButton");
 const homeRankingButton = document.querySelector("#homeRankingButton");
 const recommendButton = document.querySelector("#recommendButton");
 const startGuide = document.querySelector("#startGuide");
+const guideStoryCopy = document.querySelector("#guideStoryCopy");
+const guideStartButton = document.querySelector("#guideStartButton");
 const itemBar = document.querySelector("#itemBar");
 const menuScreen = document.querySelector("#menuScreen");
 const menuTitle = document.querySelector("#menuTitle");
@@ -96,6 +112,7 @@ const gameSetScreen = document.querySelector("#gameSetScreen");
 const retryButton = document.querySelector("#retryButton");
 const resultGrade = document.querySelector("#resultGrade");
 const resultName = document.querySelector("#resultName");
+const resultMissionLine = document.querySelector("#resultMissionLine");
 const resultScoreHero = document.querySelector("#resultScoreHero");
 const resultDeliveries = document.querySelector("#resultDeliveries");
 const resultCombo = document.querySelector("#resultCombo");
@@ -133,6 +150,7 @@ const resultTabPanels = {
   ranking: document.querySelector("#resultRankingPanel"),
 };
 const guideIconCanvases = [...document.querySelectorAll("[data-guide-icon]")];
+const controlModeButtons = [...document.querySelectorAll("[data-control-mode-option]")];
 
 const directionState = {
   up: false,
@@ -156,6 +174,8 @@ const touchControl = {
   currentX: 0,
   currentY: 0,
 };
+
+let controlMode = loadControlMode();
 
 const keyToDirection = {
   ArrowUp: "up",
@@ -419,6 +439,7 @@ const shortNameNouns = [
 ];
 
 const todayKey = getJstDateKey(new Date());
+const dailyModifier = getDailyModifier(todayKey);
 const map = createDailyMap(todayKey);
 const baseNpcScores = buildNpcScoresForDate(todayKey, 12);
 const weekDates = getCurrentWeekDateKeys(todayKey);
@@ -433,10 +454,14 @@ let currentJob;
 let roadEvents;
 let supportItems;
 let hazards;
+let audioContext = null;
 
 applyPreparedRun(createPreparedRun("idle"));
 
-dateLabel.textContent = getDailyCityName(todayKey);
+const dailyMission = getDailyMission(todayKey);
+dateLabel.textContent = `${dailyMission.cityLabel}・${dailyModifier.label}`;
+guideStoryCopy.textContent = dailyMission.summary;
+setControlMode(controlMode, false);
 updateManualItems();
 updateHud();
 renderRankings();
@@ -453,6 +478,7 @@ if ("ResizeObserver" in window) {
 }
 
 startButton.addEventListener("click", handlePrimaryButton);
+guideStartButton.addEventListener("click", startCountdown);
 retryButton.addEventListener("click", startCountdown);
 resumeButton.addEventListener("click", resumeRun);
 pauseRetryButton.addEventListener("click", restartFromPause);
@@ -461,6 +487,9 @@ pauseRecommendButton.addEventListener("click", () => openMenuScreen("recommend")
 homeRankingButton.addEventListener("click", () => openMenuScreen("ranking"));
 recommendButton.addEventListener("click", () => openMenuScreen("recommend"));
 menuCloseButton.addEventListener("click", closeMenuScreen);
+controlModeButtons.forEach((button) => {
+  button.addEventListener("click", () => setControlMode(button.dataset.controlModeOption));
+});
 resultTabButtons.forEach((button) => {
   button.addEventListener("click", () => activateResultTab(button.dataset.resultTab));
 });
@@ -520,6 +549,7 @@ directionButtons.forEach((button) => {
 
 canvas.addEventListener("pointerdown", (event) => {
   if (activeRun.status !== "running") return;
+  if (controlMode !== "drag") return;
   event.preventDefault();
   const point = getCanvasPointer(event);
   touchControl.active = true;
@@ -584,6 +614,34 @@ function resetInput() {
   syncDirectionButtons();
 }
 
+function loadControlMode() {
+  try {
+    const saved = localStorage.getItem(CONTROL_MODE_KEY);
+    return saved === "pad" ? "pad" : "drag";
+  } catch {
+    return "drag";
+  }
+}
+
+function setControlMode(nextMode, shouldSave = true) {
+  controlMode = nextMode === "pad" ? "pad" : "drag";
+  gameColumn.dataset.controlMode = controlMode;
+  controlModeButtons.forEach((button) => {
+    const isActive = button.dataset.controlModeOption === controlMode;
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+  if (controlMode === "pad") {
+    endTouchControl();
+  }
+
+  if (!shouldSave) return;
+  try {
+    localStorage.setItem(CONTROL_MODE_KEY, controlMode);
+  } catch {
+    // 保存できない環境では、このプレイ中だけ切り替える。
+  }
+}
+
 function handlePrimaryButton() {
   if (activeRun.status === "countdown" || activeRun.status === "running") {
     pauseRun();
@@ -598,6 +656,9 @@ function startCountdown() {
     return;
   }
 
+  resumeAudio();
+  playCue("start");
+
   const isRetryStart = activeRun.status === "ended" || document.body.classList.contains("show-results");
   if (activeRun.status !== "idle") {
     applyPreparedRun(createPreparedRun("idle"));
@@ -608,7 +669,7 @@ function startCountdown() {
   countdownUntil = performance.now() + countdownDurationMs;
   resetInput();
   startButton.disabled = false;
-  startButton.textContent = "一時停止";
+  startButton.textContent = "ひと休み";
   updateManualItems();
   closeMenuScreen();
   document.body.classList.remove("show-results");
@@ -702,7 +763,7 @@ function resumeRun() {
 
   pauseOverlay.classList.add("is-hidden");
   startButton.disabled = false;
-  startButton.textContent = "一時停止";
+  startButton.textContent = "ひと休み";
   updateManualItems();
 
   if (!animationFrame) {
@@ -744,6 +805,7 @@ function createFreshRun(status = "countdown") {
     manualItems: createManualItemStock(),
     nearMisses: 0,
     maxCarry: 0,
+    secondHalfAnnounced: false,
     timeLeft: GAME_SECONDS,
     carrying: false,
     carriedPackages: [],
@@ -805,19 +867,20 @@ function updateCountdown(now) {
     countdownOverlay.classList.add("is-hidden");
     startGuide.classList.add("is-hidden");
     startButton.disabled = false;
-    startButton.textContent = "一時停止";
+    startButton.textContent = "ひと休み";
     updateManualItems();
     return;
   }
 
   const elapsed = countdownDurationMs - Math.max(0, remaining);
   const stepIndex = clamp(Math.floor(elapsed / COUNTDOWN_STEP_MS), 0, 3);
-  const label = ["3", "2", "1", "開始"][stepIndex];
+  const label = ["3", "2", "1", "配達へ"][stepIndex];
   countdownOverlay.textContent = label;
 }
 
 function updateRun(dt) {
   activeRun.timeLeft = Math.max(0, activeRun.timeLeft - dt);
+  maybeTriggerSecondHalfCue();
   const wasFlying = activeRun.flight > 0;
   activeRun.rush = Math.max(0, activeRun.rush - dt);
   activeRun.shield = Math.max(0, activeRun.shield - dt);
@@ -880,18 +943,29 @@ function movePlayer(dt) {
   moveX /= length;
   moveY /= length;
 
-  const speed = getPlayerSpeed() * dt * (isSlipping ? 1.04 : 1);
+  const strengthScale = input.active ? 0.58 + input.strength * 0.42 : 1;
+  const speed = getPlayerSpeed() * dt * (isSlipping ? 1.04 : 1) * strengthScale;
+  const steps = Math.max(1, Math.ceil(speed / MAX_MOVE_STEP_PIXELS));
+  const stepSpeed = speed / steps;
+  activeRun.player.facing = Math.atan2(moveY, moveX);
+
+  for (let index = 0; index < steps; index += 1) {
+    const moved = movePlayerStep(moveX, moveY, stepSpeed);
+    if (!moved) break;
+  }
+}
+
+function movePlayerStep(moveX, moveY, speed) {
   const player = activeRun.player;
   const currentX = player.x;
   const currentY = player.y;
   const nextX = currentX + moveX * speed;
   const nextY = currentY + moveY * speed;
-  activeRun.player.facing = Math.atan2(moveY, moveX);
 
   if (isWalkable(nextX, nextY, PLAYER_RADIUS)) {
     player.x = nextX;
     player.y = nextY;
-    return;
+    return true;
   }
 
   const slideMoves = getSlideMoveCandidates(currentX, currentY, moveX, moveY, speed);
@@ -902,9 +976,7 @@ function movePlayer(dt) {
     return true;
   });
 
-  if (!moved) {
-    applyRoadCenterAssist(speed);
-  }
+  return moved || applyRoadCenterAssist(speed);
 }
 
 function getSlideMoveCandidates(x, y, moveX, moveY, speed) {
@@ -913,18 +985,22 @@ function getSlideMoveCandidates(x, y, moveX, moveY, speed) {
   const hasY = Math.abs(moveY) > 0.08;
   const partialX = hasX ? x + moveX * speed : x;
   const partialY = hasY ? y + moveY * speed : y;
-  const gentleX = hasX ? x + moveX * speed * 0.58 : x;
-  const gentleY = hasY ? y + moveY * speed * 0.58 : y;
+  const gentleX = hasX ? x + moveX * speed * 0.62 : x;
+  const gentleY = hasY ? y + moveY * speed * 0.62 : y;
+  const tinyX = hasX ? x + moveX * speed * 0.34 : x;
+  const tinyY = hasY ? y + moveY * speed * 0.34 : y;
 
   const xMove = { x: partialX, y };
   const yMove = { x, y: partialY };
   const gentleXMove = { x: gentleX, y };
   const gentleYMove = { x, y: gentleY };
+  const tinyXMove = { x: tinyX, y };
+  const tinyYMove = { x, y: tinyY };
 
   if (Math.abs(moveX) >= Math.abs(moveY)) {
-    candidates.push(xMove, yMove, gentleXMove, gentleYMove);
+    candidates.push(xMove, yMove, gentleXMove, gentleYMove, tinyXMove, tinyYMove);
   } else {
-    candidates.push(yMove, xMove, gentleYMove, gentleXMove);
+    candidates.push(yMove, xMove, gentleYMove, gentleXMove, tinyYMove, tinyXMove);
   }
 
   return candidates;
@@ -933,7 +1009,7 @@ function getSlideMoveCandidates(x, y, moveX, moveY, speed) {
 function applyRoadCenterAssist(speed) {
   const player = activeRun.player;
   const cell = getPlayerCell(player);
-  if (!isRoadCell(cell)) return;
+  if (!isRoadCell(cell)) return false;
 
   const hasLeft = map.road[cell.row]?.[cell.col - 1];
   const hasRight = map.road[cell.row]?.[cell.col + 1];
@@ -941,22 +1017,26 @@ function applyRoadCenterAssist(speed) {
   const hasDown = map.road[cell.row + 1]?.[cell.col];
   const centerX = centerOf(cell.col);
   const centerY = centerOf(cell.row);
-  const nudge = speed * 0.42;
+  const nudge = speed * 0.72;
+  const candidates = [];
+
+  const centeredX = moveToward(player.x, centerX, nudge);
+  const centeredY = moveToward(player.y, centerY, nudge);
 
   if ((hasLeft || hasRight) && !hasUp && !hasDown) {
-    const nextY = moveToward(player.y, centerY, nudge);
-    if (isWalkable(player.x, nextY, PLAYER_RADIUS)) {
-      player.y = nextY;
-    }
-    return;
+    candidates.push({ x: player.x, y: centeredY });
+  } else if ((hasUp || hasDown) && !hasLeft && !hasRight) {
+    candidates.push({ x: centeredX, y: player.y });
+  } else {
+    candidates.push({ x: centeredX, y: player.y }, { x: player.x, y: centeredY }, { x: centeredX, y: centeredY });
   }
 
-  if ((hasUp || hasDown) && !hasLeft && !hasRight) {
-    const nextX = moveToward(player.x, centerX, nudge);
-    if (isWalkable(nextX, player.y, PLAYER_RADIUS)) {
-      player.x = nextX;
-    }
-  }
+  return candidates.some((candidate) => {
+    if (!isWalkable(candidate.x, candidate.y, PLAYER_RADIUS)) return false;
+    player.x = candidate.x;
+    player.y = candidate.y;
+    return true;
+  });
 }
 
 function getInputVector() {
@@ -971,6 +1051,10 @@ function getInputVector() {
   dx += touchVector.x;
   dy += touchVector.y;
 
+  const shaped = shapeInputVector(dx, dy);
+  dx = shaped.x;
+  dy = shaped.y;
+
   const length = Math.hypot(dx, dy);
   if (length === 0) {
     return { x: 0, y: 0, active: false, strength: 0 };
@@ -984,6 +1068,18 @@ function getInputVector() {
   };
 }
 
+function shapeInputVector(dx, dy) {
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
+
+  if (absX > 0 && absY > 0) {
+    if (absX >= absY * INPUT_AXIS_SNAP_RATIO) return { x: dx, y: 0 };
+    if (absY >= absX * INPUT_AXIS_SNAP_RATIO) return { x: 0, y: dy };
+  }
+
+  return { x: dx, y: dy };
+}
+
 function getTouchVector() {
   if (!touchControl.active) return { x: 0, y: 0 };
 
@@ -991,17 +1087,23 @@ function getTouchVector() {
   const dy = touchControl.currentY - touchControl.originY;
   const distance = Math.hypot(dx, dy);
 
-  if (distance < 10) return { x: 0, y: 0 };
+  if (distance < TOUCH_DEADZONE_PIXELS) return { x: 0, y: 0 };
+
+  const strength = clamp(
+    (distance - TOUCH_DEADZONE_PIXELS) / (TOUCH_FULL_TILT_PIXELS - TOUCH_DEADZONE_PIXELS),
+    0,
+    1,
+  );
 
   return {
-    x: dx / distance,
-    y: dy / distance,
+    x: (dx / distance) * strength,
+    y: (dy / distance) * strength,
   };
 }
 
 function getPlayerSpeed() {
   const comboBonus = Math.min(activeRun.combo, 6) * 7;
-  const rushBonus = activeRun.rush > 0 ? RUSH_SPEED_BONUS : 0;
+  const rushBonus = activeRun.rush > 0 ? RUSH_SPEED_BONUS * getRushControlSpeedFactor() : 0;
   const flightBonus = activeRun.flight > 0 ? 32 : 0;
   const lastSpurtBonus = isLastSpurtActive() ? LAST_SPURT_SPEED_BONUS : 0;
   const slowPenalty = activeRun.slow > 0 ? 78 : 0;
@@ -1009,8 +1111,30 @@ function getPlayerSpeed() {
   return Math.max(0, activeRun.player.speed + comboBonus + rushBonus + flightBonus + lastSpurtBonus - slowPenalty - stunPenalty);
 }
 
+function getRushControlSpeedFactor() {
+  if (activeRun.flight > 0) return 1;
+
+  const cell = getPlayerCell(activeRun.player);
+  if (!isRoadCell(cell)) return 0.78;
+  if (isIntersectionCell(map, cell)) return 0.78;
+  if (isNearIntersectionCell(map, cell)) return 0.86;
+  return 1;
+}
+
 function isLastSpurtActive() {
   return activeRun.status === "running" && activeRun.timeLeft > 0 && activeRun.timeLeft <= LAST_SPURT_SECONDS;
+}
+
+function maybeTriggerSecondHalfCue() {
+  if (activeRun.secondHalfAnnounced || activeRun.timeLeft > SECOND_HALF_SECONDS) return;
+
+  activeRun.secondHalfAnnounced = true;
+  activeRun.rush = Math.max(activeRun.rush, 0.8);
+  addFloatText(activeRun.player.x, activeRun.player.y - 74, "甲羅急便", "#f0bf39", 1.05, -36);
+  createBurst(activeRun.player.x, activeRun.player.y, "#f0bf39", 14);
+  triggerShake(1.3, 0.14);
+  vibrate([12, 18, 12]);
+  playCue("half");
 }
 
 function getFastTargetSeconds(job) {
@@ -1230,22 +1354,23 @@ function checkPackageAndDestination() {
     activeRun.carriedPackages = [];
     activeRun.carrying = false;
     activeRun.flash = 0.18;
-    addFloatText(destination.x, destination.y - 28, `${cargoCount}個 +${gained}`, "#ffffff");
+    addFloatText(destination.x, destination.y - 28, `お届け${cargoCount}個 +${gained}`, "#ffffff");
     createBurst(destination.x, destination.y, "#e85d56", 12);
     triggerShake(1.6, 0.16);
     vibrate(28);
+    playCue("delivery");
 
     if (fastBonus > 0) {
-      addFloatText(player.x, player.y - 48, `早届け +${fastBonus}`, "#12d8df");
+      addFloatText(player.x, player.y - 48, `早便 +${fastBonus}`, "#12d8df");
     }
 
     if (multiBonus > 0) {
-      addFloatText(player.x, player.y - 66, `まとめ +${multiBonus}`, "#f0bf39");
+      addFloatText(player.x, player.y - 66, `まとめ便 +${multiBonus}`, "#f0bf39");
     }
 
     if (Math.floor(comboBefore / 3) < Math.floor(activeRun.combo / 3)) {
       activeRun.rush = RUSH_SECONDS;
-      addFloatText(player.x, player.y - 62, "ターボ", "#12d8df");
+      addFloatText(player.x, player.y - 62, "追い風", "#12d8df");
       createBurst(player.x, player.y, "#12d8df", 16);
       triggerShake(2.1, 0.18);
       vibrate([18, 20, 18]);
@@ -1280,9 +1405,10 @@ function pickupPackage(choice) {
 
   awardScore(25 + optionBonus, "pickup");
   activeRun.flash = 0.15;
-  addFloatText(pickup.x, pickup.y - 24, `${getCarriedCount()}個目 +${25 + optionBonus}`, "#f0bf39");
+  addFloatText(pickup.x, pickup.y - 24, `甲羅に${getCarriedCount()}個 +${25 + optionBonus}`, "#f0bf39");
   createBurst(pickup.x, pickup.y, "#f0bf39", 8);
   vibrate(12);
+  playCue("pickup");
 }
 
 function getCarriedCount() {
@@ -1320,11 +1446,11 @@ function createManualItemStock() {
 
 function getManualItemName(kind) {
   if (kind === "clock") return "時計";
-  if (kind === "shield") return "シールド";
-  if (kind === "magnet") return "マグネット";
-  if (kind === "turbo") return "ターボ";
-  if (kind === "flight") return "飛行";
-  return "アイテム";
+  if (kind === "shield") return "甲羅守り";
+  if (kind === "magnet") return "磁石";
+  if (kind === "turbo") return "追い風";
+  if (kind === "flight") return "ひこうき";
+  return "道具";
 }
 
 function getManualItemActiveSeconds(kind) {
@@ -1355,34 +1481,36 @@ function useManualItem(kind) {
 
   if (kind === "clock") {
     activeRun.timeLeft = Math.min(BONUS_MAX_TIME, activeRun.timeLeft + MANUAL_CLOCK_SECONDS);
-    addFloatText(x, y - 48, `時間+${MANUAL_CLOCK_SECONDS.toFixed(1)}秒`, "#12d8df");
+    addFloatText(x, y - 48, `時計+${MANUAL_CLOCK_SECONDS.toFixed(1)}秒`, "#12d8df");
     createBurst(x, y, "#12d8df", 12);
   } else if (kind === "shield") {
     activeRun.shield = Math.max(activeRun.shield, SHIELD_SECONDS);
-    addFloatText(x, y - 48, "シールド開始", "#8e6df0");
+    addFloatText(x, y - 48, "甲羅守り", "#8e6df0");
     createBurst(x, y, "#8e6df0", 14);
   } else if (kind === "magnet") {
     activeRun.magnet = Math.max(activeRun.magnet, MAGNET_SECONDS);
-    addFloatText(x, y - 48, "マグネット開始", "#f0bf39");
+    addFloatText(x, y - 48, "磁石オン", "#f0bf39");
     createBurst(x, y, "#f0bf39", 12);
   } else if (kind === "turbo") {
     activeRun.rush = Math.max(activeRun.rush, TURBO_ITEM_SECONDS);
-    addFloatText(x, y - 48, "ターボ開始", "#12d8df");
+    addFloatText(x, y - 48, "追い風", "#12d8df");
     createBurst(x, y, "#12d8df", 12);
   } else if (kind === "flight") {
     activeRun.flight = Math.max(activeRun.flight, FLIGHT_SECONDS);
     activeRun.stunned = 0;
-    addFloatText(x, y - 48, "飛行開始", "#4f9cff");
+    addFloatText(x, y - 48, "ひとっ飛び", "#4f9cff");
     createBurst(x, y, "#4f9cff", 16);
   }
 
   activeRun.flash = Math.max(activeRun.flash, 0.12);
   triggerShake(1.3, 0.14);
   vibrate([12, 18]);
+  playCue("item");
   updateManualItems();
 }
 
 function updateManualItems() {
+  const recommendedItems = getRecommendedManualItems();
   document.querySelectorAll("[data-manual-item]").forEach((button) => {
     const kind = button.dataset.manualItem;
     const count = activeRun.manualItems?.[kind] ?? 0;
@@ -1391,8 +1519,100 @@ function updateManualItems() {
     if (countLabel) countLabel.textContent = count;
     button.disabled = activeRun.status !== "running" || count <= 0 || activeSeconds > 0;
     button.classList.toggle("is-active", activeSeconds > 0);
+    button.classList.toggle("is-empty", count <= 0 && activeSeconds <= 0);
+    button.classList.toggle("is-ready", activeRun.status === "running" && count > 0 && activeSeconds <= 0);
+    button.classList.toggle("is-recommended", recommendedItems.has(kind) && count > 0 && activeSeconds <= 0);
   });
   itemBar.classList.toggle("is-running", activeRun.status === "running");
+}
+
+function getRecommendedManualItems() {
+  const recommendations = new Set();
+  if (activeRun.status !== "running") return recommendations;
+
+  if ((activeRun.manualItems?.clock ?? 0) > 0 && activeRun.timeLeft <= 10) {
+    recommendations.add("clock");
+  }
+
+  if ((activeRun.manualItems?.shield ?? 0) > 0 && activeRun.shield <= 0 && isShieldRecommended()) {
+    recommendations.add("shield");
+  }
+
+  if ((activeRun.manualItems?.magnet ?? 0) > 0 && activeRun.magnet <= 0 && isMagnetRecommended()) {
+    recommendations.add("magnet");
+  }
+
+  if ((activeRun.manualItems?.turbo ?? 0) > 0 && activeRun.rush <= 0 && isTurboRecommended()) {
+    recommendations.add("turbo");
+  }
+
+  if ((activeRun.manualItems?.flight ?? 0) > 0 && activeRun.flight <= 0 && isFlightRecommended()) {
+    recommendations.add("flight");
+  }
+
+  return recommendations;
+}
+
+function isShieldRecommended() {
+  const player = activeRun.player;
+  const movingDanger = hazards.some((hazard) => {
+    const alertDistance = getHazardRadius(hazard) + 52;
+    return Math.hypot(player.x - hazard.x, player.y - hazard.y) <= alertDistance;
+  });
+  if (movingDanger) return true;
+
+  const shieldedEvents = roadEvents.filter((event) => {
+    if (event.kind === "roadwork" || event.kind === "electric") return true;
+    return event.kind === "rail" && isRailClosed(event);
+  });
+
+  return shieldedEvents.some((event) => distanceToCell(player, event.cell) <= event.radius + 44);
+}
+
+function isMagnetRecommended() {
+  const player = activeRun.player;
+  const pickupNearBy = canPickMorePackages() &&
+    getAvailablePickupChoices(currentJob).some((choice) => {
+      const distance = distanceToCell(player, choice.cell);
+      return distance > getPickupRadius() + 8 && distance <= 112;
+    });
+  if (pickupNearBy) return true;
+
+  const itemNearby = supportItems.some((item) => {
+    if (item.collected) return false;
+    const distance = distanceToCell(player, item.cell);
+    return distance > getItemPickupRadius() + 8 && distance <= 108;
+  });
+  if (itemNearby) return true;
+
+  return activeRun.carrying && distanceToCell(player, currentJob.destination) <= 116 && distanceToCell(player, currentJob.destination) > getDestinationRadius() + 8;
+}
+
+function isTurboRecommended() {
+  const target = getCurrentTarget();
+  const distance = distanceToCell(activeRun.player, target);
+  if (distance < TILE * 5) return false;
+
+  const cell = getPlayerCell(activeRun.player);
+  if (!isRoadCell(cell)) return false;
+  return !isIntersectionCell(map, cell) && !isNearIntersectionCell(map, cell);
+}
+
+function isFlightRecommended() {
+  const player = activeRun.player;
+  if (!isRoadCell(getPlayerCell(player))) return true;
+
+  const riskyGroundEvent = roadEvents.some((event) => {
+    if (!["roadwork", "electric", "rail", "oil"].includes(event.kind)) return false;
+    if (event.kind === "rail" && !isRailClosed(event)) return false;
+    return distanceToCell(player, event.cell) <= event.radius + 54;
+  });
+  if (riskyGroundEvent) return true;
+
+  return hazards.some((hazard) => {
+    const distance = Math.hypot(player.x - hazard.x, player.y - hazard.y);
+    return distance <= getHazardRadius(hazard) + 44;
+  });
 }
 
 function updateBonus(dt) {
@@ -1439,19 +1659,19 @@ function checkSupportItemPickup() {
   } else if (item.kind === "shield") {
     grantManualItem(item.kind);
     awardScore(SUPPORT_ITEM_SCORE, "bonus");
-    addFloatText(point.x, point.y - 28, "シールド +1", "#8e6df0");
+    addFloatText(point.x, point.y - 28, "甲羅守り +1", "#8e6df0");
   } else if (item.kind === "magnet") {
     grantManualItem(item.kind);
     awardScore(SUPPORT_ITEM_SCORE, "bonus");
-    addFloatText(point.x, point.y - 28, "マグネット +1", "#f0bf39");
+    addFloatText(point.x, point.y - 28, "磁石 +1", "#f0bf39");
   } else if (item.kind === "turbo") {
     grantManualItem(item.kind);
     awardScore(SUPPORT_ITEM_SCORE, "bonus");
-    addFloatText(point.x, point.y - 28, "ターボ +1", "#12d8df");
+    addFloatText(point.x, point.y - 28, "追い風 +1", "#12d8df");
   } else if (item.kind === "flight") {
     grantManualItem(item.kind);
     awardScore(SUPPORT_ITEM_SCORE, "bonus");
-    addFloatText(point.x, point.y - 28, "飛行 +1", "#4f9cff");
+    addFloatText(point.x, point.y - 28, "ひこうき +1", "#4f9cff");
   } else {
     awardScore(120, "bonus");
     addFloatText(point.x, point.y - 28, "星 +120", "#f0bf39");
@@ -1664,6 +1884,7 @@ function triggerElectricTrap(event) {
   createBurst(point.x, point.y, "#4f9cff", 18);
   triggerShake(3.8, 0.28);
   vibrate([32, 26, 32]);
+  playCue("hit");
 }
 
 function triggerRailPenalty(event) {
@@ -1689,6 +1910,7 @@ function triggerRailPenalty(event) {
   createBurst(point.x, point.y, "#e85d56", 12);
   triggerShake(4, 0.24);
   vibrate([36, 24, 36]);
+  playCue("hit");
 }
 
 function triggerSignalPenalty(event) {
@@ -1706,6 +1928,7 @@ function triggerSignalPenalty(event) {
   addFloatText(point.x, point.y - 30, "赤信号 -35", "#e85d56");
   triggerShake(2.2, 0.16);
   vibrate([18, 22]);
+  playCue("hit");
 }
 
 function triggerRoadworkPenalty(event) {
@@ -1731,6 +1954,7 @@ function triggerRoadworkPenalty(event) {
   createBurst(point.x, point.y, "#e85d56", 10);
   triggerShake(3.5, 0.22);
   vibrate([30, 22, 30]);
+  playCue("hit");
 }
 
 function consumeShield(x, y) {
@@ -1738,7 +1962,7 @@ function consumeShield(x, y) {
 
   activeRun.shield = 0;
   activeRun.flash = Math.max(activeRun.flash, 0.16);
-  addFloatText(x, y - 34, "シールドで回避", "#8e6df0");
+  addFloatText(x, y - 34, "甲羅で回避", "#8e6df0");
   createBurst(x, y, "#8e6df0", 14);
   triggerShake(1.8, 0.16);
   vibrate([12, 20, 12]);
@@ -1773,6 +1997,7 @@ function checkHazardCollision() {
   createBurst(player.x, player.y, "#e85d56", 14);
   triggerShake(4.6, 0.28);
   vibrate([45, 30, 45]);
+  playCue("hit");
 }
 
 function checkNearMissBonus() {
@@ -1820,10 +2045,10 @@ function finishRun() {
   activeRun.timeLeft = 0;
   resetInput();
   startButton.disabled = true;
-  startButton.textContent = "開始";
+  startButton.textContent = "配達へ";
   pauseOverlay.classList.add("is-hidden");
   startGuide.classList.add("is-hidden");
-  countdownOverlay.textContent = "配達完了";
+  countdownOverlay.textContent = "お届け完了";
   countdownOverlay.classList.remove("is-hidden");
   countdownOverlay.classList.add("is-finish");
   updateManualItems();
@@ -1831,6 +2056,7 @@ function finishRun() {
   document.body.classList.remove("is-last-spurt");
   timeCard.classList.remove("is-danger");
   vibrate([34, 28, 34]);
+  playCue("finish");
 
   window.setTimeout(() => completeFinishedRun(record, previousSessionBest), FINISH_ANNOUNCE_MS);
 }
@@ -1840,7 +2066,7 @@ function completeFinishedRun(record, previousSessionBest) {
 
   activeRun.status = "ended";
   startButton.disabled = false;
-  startButton.textContent = "もう一度";
+  startButton.textContent = "もう一便";
   countdownOverlay.classList.add("is-hidden");
   countdownOverlay.classList.remove("is-finish");
   updateManualItems();
@@ -1857,6 +2083,7 @@ function renderResult(record, previousSessionBest) {
   resultGrade.setAttribute("aria-label", `ランク ${grade.label}`);
   resultGrade.className = `result-grade grade-${grade.key}`;
   resultName.textContent = record.randomName;
+  resultMissionLine.textContent = `今日のかめ便: ${dailyMission.short}`;
   resultScoreHero.textContent = formatNumber(record.score);
   resultDeliveries.textContent = record.deliveries;
   resultCombo.textContent = record.combo;
@@ -2024,11 +2251,11 @@ function getResultBreakdownItems(record) {
   const breakdown = { ...createEmptyScoreBreakdown(), ...(record.scoreBreakdown ?? {}) };
   const items = [
     {
-      label: "配達スコア",
+      label: "お届けスコア",
       value: breakdown.pickup + breakdown.delivery + breakdown.distance,
     },
     {
-      label: "早届けとまとめ配達",
+      label: "早便とまとめ便",
       value: breakdown.fast + breakdown.combo + breakdown.multi,
     },
     {
@@ -2066,25 +2293,24 @@ function getResultNextMoves(record, rankInfo, previousSessionBest) {
   const moves = [];
 
   if (record.deliveries === 0) {
-    moves.push({ label: "最初", value: "まずバッグを拾う" });
-    moves.push({ label: "操作", value: "道の真ん中を走る" });
+    moves.push({ label: "まずは", value: "バッグを甲羅へ" });
     return moves;
   }
 
-  if (record.collisions > 0) moves.push({ label: "安全運転", value: "危ない道の前にシールド" });
-  if ((record.maxCarry ?? 0) < 2) moves.push({ label: "まとめ配達", value: "2個以上持って届ける" });
-  if ((record.supportPickups ?? 0) < 2) moves.push({ label: "アイテム", value: "道沿いで拾う" });
-  if ((record.bonuses ?? 0) === 0) moves.push({ label: "時計", value: "1つ確保する" });
-  if (record.combo < 3) moves.push({ label: "連続成功", value: `あと${Math.max(1, 3 - record.combo)}回でターボ` });
-  if ((record.nearMisses ?? 0) === 0 && record.deliveries >= 5) moves.push({ label: "すれすれ", value: "警告リングの外をかすめる" });
-  if (record.deliveries < 8) moves.push({ label: "配達数", value: `あと${8 - record.deliveries}件` });
-  if (rankInfo.gap > 0 && rankInfo.rank <= 10) moves.push({ label: "順位", value: `あと${formatNumber(rankInfo.gap)}で上へ` });
+  if (record.collisions > 0) moves.push({ label: "甲羅守り", value: "危ない前に使う" });
+  if ((record.maxCarry ?? 0) < 2) moves.push({ label: "まとめ便", value: "2個のせて届ける" });
+  if ((record.supportPickups ?? 0) < 2) moves.push({ label: "道具拾い", value: "見えたら寄る" });
+  if ((record.bonuses ?? 0) === 0) moves.push({ label: "時計", value: "1つ拾って使う" });
+  if (record.combo < 3) moves.push({ label: "連便", value: `あと${Math.max(1, 3 - record.combo)}件` });
+  if ((record.nearMisses ?? 0) === 0 && record.deliveries >= 5) moves.push({ label: "すれすれ", value: "輪の外をかすめる" });
+  if (record.deliveries < 8) moves.push({ label: "お届け", value: `あと${8 - record.deliveries}件` });
+  if (rankInfo.gap > 0 && rankInfo.rank <= 10) moves.push({ label: "番付", value: `あと${formatNumber(rankInfo.gap)}` });
   if (record.score <= previousSessionBest && previousSessionBest > 0) {
     moves.push({ label: "自己最高", value: `あと${formatNumber(previousSessionBest - record.score + 1)}` });
   }
 
-  moves.push({ label: "街", value: "もう一度走る" });
-  return moves.slice(0, 2);
+  moves.push({ label: "もう一便", value: "今日の街を走る" });
+  return moves.slice(0, 1);
 }
 
 function renderResultHighlights(record) {
@@ -2103,7 +2329,7 @@ function renderResultHighlights(record) {
 
 function getResultHighlights(record) {
   const delivery = record.deliveries > 0 ? `${record.deliveries}件` : "0件";
-  const combo = record.combo > 0 ? `${record.combo}連続` : "なし";
+  const combo = record.combo > 0 ? `${record.combo}連便` : "なし";
   const safety =
     record.collisions === 0 && record.deliveries > 0
       ? "無接触"
@@ -2112,24 +2338,24 @@ function getResultHighlights(record) {
         : `${record.collisions}回接触`;
 
   return [
-    { label: "配達", value: delivery },
-    { label: "連続", value: combo },
+    { label: "お届け", value: delivery },
+    { label: "連便", value: combo },
     { label: "接触", value: safety },
   ];
 }
 
 function getResultTip(record) {
   const itemPickups = getRecordItemPickups(record);
-  if (record.deliveries === 0) return "バッグの荷物を拾うと、赤い線が家まで出ます。まずは1件。";
-  if (record.collisions >= 3) return "危ない道に入る前にシールド。車や工事との接触を1回防げます。";
-  if ((record.maxCarry ?? 0) < 2) return "荷物は3個まで持てます。近い荷物を拾ってから家へ向かうと伸びます。";
-  if ((record.supportPickups ?? 0) < 2) return "マグネット中は少し離れた荷物やアイテムも拾えます。屋台も見つけたら寄り道。";
-  if ((itemPickups.clock ?? 0) === 0) return "時計は好きなタイミングで使えます。残り時間が少なくなる前に押すと安心です。";
-  if (record.combo < 3) return "3件続けて届けると少しターボ。水たまりや赤信号で連続を切らさないように。";
-  if (record.collisions >= 2) return "飛行は建物や電気トラップを越えられます。詰まったら迷わず飛ぶ。";
-  if (record.deliveries < 8) return "追い風とワープで移動を短縮。ターボと重なると一気に伸びます。";
-  if ((record.nearMisses ?? 0) === 0) return "警告リングの外側をかすめると加点。シールド中なら狙いやすいです。";
-  return "時計、マグネット、ターボをつないで、ぶつからずに配達数を伸ばそう。";
+  if (record.deliveries === 0) return "黄色い線を追うとバッグに着きます。";
+  if (record.collisions >= 3) return "危ない道の前で甲羅守り。1回だけ守れます。";
+  if ((record.maxCarry ?? 0) < 2) return "近いバッグを2個、甲羅にのせて届けると伸びます。";
+  if ((record.supportPickups ?? 0) < 2) return "道具は見えたら拾う。磁石は特に便利です。";
+  if ((itemPickups.clock ?? 0) === 0) return "時計は残り時間が少ない時に使うと安心です。";
+  if (record.combo < 3) return "3件続けて届けると追い風が入ります。";
+  if (record.collisions >= 2) return "ひこうきは工事や電気を越えたい時に使えます。";
+  if (record.deliveries < 8) return "追い風とワープで、カメ配達員の近道を作ろう。";
+  if ((record.nearMisses ?? 0) === 0) return "危険な輪の外側をかすめると少し加点。";
+  return "道具を使い切ると、甲羅便のスコアがもう一段伸びます。";
 }
 
 function getResultGrade(record) {
@@ -2143,6 +2369,8 @@ function getResultGrade(record) {
 
 function updateHud() {
   const isLastSpurt = isLastSpurtActive();
+  gameColumn.dataset.runStatus = activeRun.status;
+  startButton.classList.toggle("is-guide-hidden", activeRun.status === "idle" && !startGuide.classList.contains("is-hidden"));
   timeValue.textContent = activeRun.timeLeft.toFixed(1);
   const timeProgress = clamp(activeRun.timeLeft / GAME_SECONDS, 0, 1);
   timeGaugeFill.style.transform = `scaleX(${timeProgress})`;
@@ -2210,18 +2438,24 @@ function drawScene() {
   ctx.scale(camera.scale, camera.scale);
   ctx.translate(-camera.x, -camera.y);
   drawMap();
-  drawRoadEvents();
-  drawTargetRoute();
-  drawJob();
-  drawBonus();
-  drawSupportItems();
-  drawHazards();
-  drawInputDirectionIndicator();
-  drawComboFocusRing();
-  drawMovementTrail();
-  drawWarpTrail();
-  drawPlayer();
-  drawEffects();
+  if (activeRun.status === "idle") {
+    drawTargetRoute();
+    drawJob();
+    drawPlayer();
+  } else {
+    drawRoadEvents();
+    drawTargetRoute();
+    drawJob();
+    drawBonus();
+    drawSupportItems();
+    drawHazards();
+    drawInputDirectionIndicator();
+    drawComboFocusRing();
+    drawMovementTrail();
+    drawWarpTrail();
+    drawPlayer();
+    drawEffects();
+  }
   ctx.restore();
 
   if (activeRun.flash > 0) {
@@ -2296,8 +2530,9 @@ function getCamera() {
   const visibleWidth = viewport.width / scale;
   const visibleHeight = viewport.height / scale;
   const player = activeRun.player;
-  const x = clamp(player.x - visibleWidth * 0.5, 0, WORLD_WIDTH - visibleWidth);
-  const y = clamp(player.y - visibleHeight * 0.54, 0, WORLD_HEIGHT - visibleHeight);
+  const anchor = getCameraAnchor();
+  const x = clamp(player.x - visibleWidth * anchor.x, 0, WORLD_WIDTH - visibleWidth);
+  const y = clamp(player.y - visibleHeight * anchor.y, 0, WORLD_HEIGHT - visibleHeight);
 
   return {
     x,
@@ -2308,8 +2543,27 @@ function getCamera() {
   };
 }
 
+function getCameraAnchor() {
+  if (activeRun.status === "idle") {
+    return { x: 0.5, y: CAMERA_IDLE_Y_ANCHOR };
+  }
+
+  if (activeRun.status !== "running" || !touchControl.active) {
+    return { x: 0.5, y: CAMERA_DEFAULT_Y_ANCHOR };
+  }
+
+  const isTouchingLowerHalf = touchControl.originY > viewport.height * 0.48;
+  const isTouchingLeft = touchControl.originX < viewport.width * 0.42;
+  const isTouchingRight = touchControl.originX > viewport.width * 0.58;
+
+  return {
+    x: isTouchingLeft ? 0.5 + CAMERA_TOUCH_X_SHIFT : isTouchingRight ? 0.5 - CAMERA_TOUCH_X_SHIFT : 0.5,
+    y: isTouchingLowerHalf ? CAMERA_TOUCH_Y_ANCHOR : CAMERA_DEFAULT_Y_ANCHOR,
+  };
+}
+
 function drawMap() {
-  ctx.fillStyle = "#78b982";
+  ctx.fillStyle = "#82b88a";
   ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
   for (let row = 0; row < ROWS; row += 1) {
@@ -2326,8 +2580,8 @@ function drawMap() {
     }
   }
 
-  ctx.strokeStyle = "rgb(22 33 47 / 14%)";
-  ctx.lineWidth = 6;
+  ctx.strokeStyle = "rgb(22 33 47 / 12%)";
+  ctx.lineWidth = 5;
   ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 }
 
@@ -2338,12 +2592,12 @@ function drawRoadTile(col, row, x, y) {
   const hasDown = map.road[row + 1]?.[col];
   const texture = Math.abs(hashString(`road:${map.seed}:${col}:${row}`)) % 4;
 
-  ctx.fillStyle = "#58636c";
+  ctx.fillStyle = "#56616a";
   ctx.fillRect(x, y, TILE, TILE);
-  ctx.fillStyle = texture % 2 === 0 ? "rgb(255 255 255 / 3%)" : "rgb(0 0 0 / 3%)";
+  ctx.fillStyle = texture % 2 === 0 ? "rgb(255 255 255 / 2%)" : "rgb(0 0 0 / 2%)";
   ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
 
-  ctx.fillStyle = "#d8d1bd";
+  ctx.fillStyle = "#d5ceb9";
   if (!hasLeft) ctx.fillRect(x, y, 4, TILE);
   if (!hasRight) ctx.fillRect(x + TILE - 4, y, 4, TILE);
   if (!hasUp) ctx.fillRect(x, y, TILE, 4);
@@ -2355,19 +2609,21 @@ function drawRoadMarking(col, row, x, y) {
   const hasRight = map.road[row]?.[col + 1];
   const hasUp = map.road[row - 1]?.[col];
   const hasDown = map.road[row + 1]?.[col];
+  const isHorizontalStraight = hasLeft && hasRight && !hasUp && !hasDown;
+  const isVerticalStraight = hasUp && hasDown && !hasLeft && !hasRight;
 
-  ctx.strokeStyle = "#f2d96a";
-  ctx.lineWidth = 2.8;
-  ctx.setLineDash([10, 13]);
+  ctx.strokeStyle = "rgb(238 213 111 / 84%)";
+  ctx.lineWidth = 2.3;
+  ctx.setLineDash([9, 15]);
 
-  if (hasLeft || hasRight) {
+  if (isHorizontalStraight) {
     ctx.beginPath();
     ctx.moveTo(x + 4, y + TILE / 2);
     ctx.lineTo(x + TILE - 4, y + TILE / 2);
     ctx.stroke();
   }
 
-  if (hasUp || hasDown) {
+  if (isVerticalStraight) {
     ctx.beginPath();
     ctx.moveTo(x + TILE / 2, y + 4);
     ctx.lineTo(x + TILE / 2, y + TILE - 4);
@@ -2378,36 +2634,72 @@ function drawRoadMarking(col, row, x, y) {
 }
 
 function drawBuilding(col, row, x, y) {
-  const palette = ["#e7c765", "#d9826d", "#82b7cc", "#a9c879", "#b9a7d9"];
+  const palette = ["#d9c476", "#c98d7a", "#8fb3c0", "#a5bf8b", "#b2a7ca"];
   const pick = Math.abs(hashString(`${map.seed}:${col}:${row}`)) % palette.length;
   const inset = 8 + (Math.abs(hashString(`inset:${col}:${row}`)) % 3);
   const roofX = x + inset;
   const roofY = y + inset;
   const roofWidth = TILE - inset * 2;
   const roofHeight = TILE - inset * 2;
+  const cornerRadii = getBuildingCornerRadii(col, row, BUILDING_CORNER_RADIUS);
 
-  ctx.fillStyle = "#73b87c";
+  ctx.fillStyle = "#56616a";
   ctx.fillRect(x, y, TILE, TILE);
-  ctx.fillStyle = "rgb(255 255 255 / 14%)";
-  roundedRect(x + 4, y + 4, TILE - 8, TILE - 8, 7);
+
+  ctx.fillStyle = "#76ad7d";
+  roundedRectCorners(x, y, TILE, TILE, cornerRadii);
   ctx.fill();
 
-  ctx.fillStyle = "rgb(20 32 50 / 14%)";
-  roundedRect(roofX + 2, roofY + 3, roofWidth, roofHeight, 6);
+  ctx.fillStyle = "rgb(255 255 255 / 10%)";
+  roundedRectCorners(
+    x + 4,
+    y + 4,
+    TILE - 8,
+    TILE - 8,
+    {
+      topLeft: Math.max(0, cornerRadii.topLeft - 4),
+      topRight: Math.max(0, cornerRadii.topRight - 4),
+      bottomRight: Math.max(0, cornerRadii.bottomRight - 4),
+      bottomLeft: Math.max(0, cornerRadii.bottomLeft - 4),
+    },
+  );
+  ctx.fill();
+
+  ctx.fillStyle = "rgb(20 32 50 / 10%)";
+  roundedRect(roofX + 2, roofY + 2, roofWidth, roofHeight, 6);
   ctx.fill();
 
   ctx.fillStyle = palette[pick];
   roundedRect(roofX, roofY, roofWidth, roofHeight, 6);
   ctx.fill();
-  ctx.strokeStyle = "rgb(255 255 255 / 34%)";
-  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = "rgb(255 255 255 / 24%)";
+  ctx.lineWidth = 1;
   ctx.stroke();
 
-  ctx.fillStyle = "rgb(20 32 50 / 12%)";
+  ctx.fillStyle = "rgb(20 32 50 / 9%)";
   roundedRect(roofX + 6, roofY + 7, 8, 6, 2);
   ctx.fill();
-  ctx.fillStyle = "rgb(255 255 255 / 16%)";
-  ctx.fillRect(roofX + 3, roofY + 3, Math.max(8, roofWidth - 6), 3);
+  ctx.fillStyle = "rgb(255 255 255 / 11%)";
+  ctx.fillRect(roofX + 4, roofY + 4, Math.max(8, roofWidth - 8), 2);
+}
+
+function getBuildingCornerRadii(col, row, radius) {
+  const openLeft = isRoadOrOutside(row, col - 1);
+  const openRight = isRoadOrOutside(row, col + 1);
+  const openUp = isRoadOrOutside(row - 1, col);
+  const openDown = isRoadOrOutside(row + 1, col);
+
+  return {
+    topLeft: openLeft && openUp ? radius : 0,
+    topRight: openRight && openUp ? radius : 0,
+    bottomRight: openRight && openDown ? radius : 0,
+    bottomLeft: openLeft && openDown ? radius : 0,
+  };
+}
+
+function isRoadOrOutside(row, col) {
+  if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return true;
+  return map.road[row][col];
 }
 
 function drawTargetRoute() {
@@ -2537,31 +2829,31 @@ function drawJob() {
 
 function drawPickupMarker(x, y, choice, index, isPreferred) {
   const badgeText = choice.bonus > 0 ? `+${choice.bonus}` : `${index + 1}`;
-  const pulse = isPreferred && activeRun.status === "running" ? 2 + Math.sin(performance.now() / 150) * 2 : 0;
+  const pulse = isPreferred && activeRun.status === "running" ? 1.5 + Math.sin(performance.now() / 170) * 1.5 : 0;
 
   ctx.save();
   ctx.translate(x, y);
-  ctx.fillStyle = `rgb(240 191 57 / ${isPreferred ? 0.22 : 0.13})`;
+  ctx.fillStyle = `rgb(240 191 57 / ${isPreferred ? 0.18 : 0.1})`;
   ctx.beginPath();
-  ctx.arc(0, 0, 23 + pulse, 0, Math.PI * 2);
+  ctx.arc(0, 0, 21 + pulse, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "rgb(20 32 50 / 24%)";
+  ctx.fillStyle = "rgb(20 32 50 / 18%)";
   ctx.beginPath();
-  ctx.ellipse(0, 14, 17, 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 14, 15, 5, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
 
-  drawPackageCanvasIcon(x, y, 1, isPreferred ? "#d9962e" : "#d2a157");
+  drawPackageCanvasIcon(x, y, 0.94, isPreferred ? "#d79737" : "#c9a066");
 
   ctx.save();
-  ctx.translate(x + 19, y - 18);
-  ctx.fillStyle = isPreferred ? "#142032" : "rgb(20 32 50 / 82%)";
-  roundedRect(-14, -9, 28, 18, 8);
+  ctx.translate(x + 17, y - 17);
+  ctx.fillStyle = isPreferred ? "rgb(20 32 50 / 88%)" : "rgb(20 32 50 / 66%)";
+  roundedRect(-12, -8, 24, 16, 8);
   ctx.fill();
   ctx.fillStyle = "#ffffff";
-  ctx.font = "1000 10px system-ui, sans-serif";
+  ctx.font = "1000 9px system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(badgeText, 0, 0);
@@ -2569,23 +2861,23 @@ function drawPickupMarker(x, y, choice, index, isPreferred) {
 }
 
 function drawDestinationMarker(x, y) {
-  const pulse = activeRun.carrying && activeRun.status === "running" ? 2 + Math.sin(performance.now() / 150) * 2 : 0;
+  const pulse = activeRun.carrying && activeRun.status === "running" ? 1.5 + Math.sin(performance.now() / 170) * 1.5 : 0;
 
   ctx.save();
   ctx.translate(x, y);
-  ctx.fillStyle = `rgb(232 93 86 / ${0.18 + (activeRun.carrying ? 0.1 : 0)})`;
+  ctx.fillStyle = `rgb(232 93 86 / ${0.15 + (activeRun.carrying ? 0.08 : 0)})`;
   ctx.beginPath();
-  ctx.arc(0, 0, 24 + pulse, 0, Math.PI * 2);
+  ctx.arc(0, 0, 22 + pulse, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "rgb(20 32 50 / 24%)";
+  ctx.fillStyle = "rgb(20 32 50 / 18%)";
   ctx.beginPath();
-  ctx.ellipse(0, 16, 19, 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 16, 17, 5, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
 
-  drawDestinationCanvasIcon(x, y, 1);
+  drawDestinationCanvasIcon(x, y, 0.94);
 }
 
 function drawFastDeliveryHalo(x, y, bonus) {
@@ -2671,34 +2963,34 @@ function drawSupportItems() {
 
     ctx.save();
     ctx.translate(point.x, point.y);
-    ctx.fillStyle = `rgb(255 255 255 / ${0.1 + pulse * 0.06})`;
+    ctx.fillStyle = `rgb(255 255 255 / ${0.08 + pulse * 0.04})`;
     ctx.beginPath();
-    ctx.arc(0, 0, 22 + pulse * 3, 0, Math.PI * 2);
+    ctx.arc(0, 0, 19 + pulse * 2, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(0, 0, 15, 0, Math.PI * 2);
+    ctx.arc(0, 0, 13.5, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "rgb(255 255 255 / 90%)";
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgb(255 255 255 / 82%)";
+    ctx.lineWidth = 2.5;
     ctx.stroke();
-    ctx.strokeStyle = "rgb(20 32 50 / 22%)";
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgb(20 32 50 / 16%)";
+    ctx.lineWidth = 1.2;
     ctx.stroke();
 
-    drawSupportItemCanvasIcon(item.kind, 0, 0, 0.72);
+    drawSupportItemCanvasIcon(item.kind, 0, 0, 0.63);
     ctx.restore();
   });
 }
 
 function getSupportItemColor(kind) {
-  if (kind === "clock") return "#12d8df";
-  if (kind === "shield") return "#6658d3";
-  if (kind === "magnet") return "#f0bf39";
-  if (kind === "turbo") return "#22d27f";
-  if (kind === "flight") return "#4f9cff";
-  return "#f7d55c";
+  if (kind === "clock") return "#21b9c5";
+  if (kind === "shield") return "#7770c8";
+  if (kind === "magnet") return "#e3b842";
+  if (kind === "turbo") return "#38b978";
+  if (kind === "flight") return "#5e96df";
+  return "#e5c85f";
 }
 
 function drawSupportItemCanvasIcon(kind, x, y, scale = 1) {
@@ -2754,26 +3046,26 @@ function drawPackageCanvasIcon(x, y, scale = 1, fill = "#d9962e", drawingContext
   drawingContext.save();
   drawingContext.translate(x, y);
   drawingContext.scale(scale, scale);
-  drawingContext.strokeStyle = "#7c4a00";
-  drawingContext.lineWidth = 3;
+  drawingContext.strokeStyle = "#79501a";
+  drawingContext.lineWidth = 2.6;
   drawingContext.lineCap = "round";
   drawingContext.beginPath();
   drawingContext.arc(0, -7, 9, Math.PI, 0, false);
   drawingContext.stroke();
-  drawingContext.fillStyle = "rgb(20 32 50 / 18%)";
+  drawingContext.fillStyle = "rgb(20 32 50 / 14%)";
   drawingContext.beginPath();
   drawingContext.ellipse(0, 14, 16, 5, 0, 0, Math.PI * 2);
   drawingContext.fill();
   drawingContext.fillStyle = fill;
   roundedRect(-16, -5, 32, 25, 7, drawingContext);
   drawingContext.fill();
-  drawingContext.fillStyle = "#f4ce78";
+  drawingContext.fillStyle = "#efd07a";
   roundedRect(-12, -2, 24, 8, 4, drawingContext);
   drawingContext.fill();
-  drawingContext.strokeStyle = "#7c4a00";
-  drawingContext.lineWidth = 2;
+  drawingContext.strokeStyle = "#79501a";
+  drawingContext.lineWidth = 1.8;
   drawingContext.stroke();
-  drawingContext.fillStyle = "rgb(255 255 255 / 30%)";
+  drawingContext.fillStyle = "rgb(255 255 255 / 22%)";
   roundedRect(-11, 1, 22, 4, 2, drawingContext);
   drawingContext.fill();
   drawingContext.restore();
@@ -2783,30 +3075,30 @@ function drawDestinationCanvasIcon(x, y, scale = 1, drawingContext = ctx) {
   drawingContext.save();
   drawingContext.translate(x, y);
   drawingContext.scale(scale, scale);
-  drawingContext.fillStyle = "rgb(20 32 50 / 18%)";
+  drawingContext.fillStyle = "rgb(20 32 50 / 14%)";
   drawingContext.beginPath();
   drawingContext.ellipse(0, 17, 18, 5, 0, 0, Math.PI * 2);
   drawingContext.fill();
-  drawingContext.fillStyle = "#fff8ef";
+  drawingContext.fillStyle = "#fff9f0";
   roundedRect(-15, -4, 30, 23, 5, drawingContext);
   drawingContext.fill();
-  drawingContext.strokeStyle = "#ffffff";
-  drawingContext.lineWidth = 2.5;
+  drawingContext.strokeStyle = "rgb(255 255 255 / 86%)";
+  drawingContext.lineWidth = 2.2;
   drawingContext.stroke();
-  drawingContext.fillStyle = "#e85d56";
+  drawingContext.fillStyle = "#e4625c";
   drawingContext.beginPath();
   drawingContext.moveTo(-18, -4);
   drawingContext.lineTo(0, -20);
   drawingContext.lineTo(18, -4);
   drawingContext.closePath();
   drawingContext.fill();
-  drawingContext.strokeStyle = "rgb(20 32 50 / 22%)";
-  drawingContext.lineWidth = 1.5;
+  drawingContext.strokeStyle = "rgb(20 32 50 / 18%)";
+  drawingContext.lineWidth = 1.3;
   drawingContext.stroke();
-  drawingContext.fillStyle = "#157f87";
+  drawingContext.fillStyle = "#167f86";
   roundedRect(-4, 6, 8, 13, 2, drawingContext);
   drawingContext.fill();
-  drawingContext.fillStyle = "#f0bf39";
+  drawingContext.fillStyle = "#dfb43d";
   roundedRect(6, 1, 6, 6, 2, drawingContext);
   drawingContext.fill();
   drawingContext.restore();
@@ -2923,7 +3215,7 @@ function drawMagnetCanvasIcon(x, y, scale = 1, color = "#172330") {
   ctx.arc(0, -2, 12, Math.PI * 0.12, Math.PI * 0.88, false);
   ctx.stroke();
 
-  ctx.fillStyle = "#e85d56";
+  ctx.fillStyle = "#d76f66";
   roundedRect(-16, 5, 8, 10, 3);
   ctx.fill();
   ctx.fillStyle = "#4f9cff";
@@ -3143,17 +3435,17 @@ function drawRailEvent(event) {
   ctx.save();
   ctx.translate(point.x, point.y);
   ctx.rotate(event.angle);
-  ctx.fillStyle = `rgb(232 93 86 / ${closed ? 0.11 + pulse * 0.08 : 0.04})`;
+  ctx.fillStyle = `rgb(232 93 86 / ${closed ? 0.08 + pulse * 0.06 : 0.03})`;
   ctx.beginPath();
   ctx.arc(0, 0, 28 + pulse * 5, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "rgb(20 32 50 / 22%)";
+  ctx.fillStyle = "rgb(20 32 50 / 16%)";
   ctx.beginPath();
   ctx.ellipse(0, 13, 27, 6, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = "#26364a";
+  ctx.strokeStyle = "#334155";
   ctx.lineWidth = 4;
   ctx.lineCap = "round";
   ctx.beginPath();
@@ -3172,7 +3464,7 @@ function drawRailEvent(event) {
   ctx.beginPath();
   roundedRect(-28, -5, 56, 10, 3);
   ctx.clip();
-  ctx.fillStyle = "#e85d56";
+  ctx.fillStyle = "#d76f66";
   for (let x = -35; x < 35; x += 14) {
     ctx.fillRect(x, -8, 6, 16);
   }
@@ -3189,28 +3481,28 @@ function drawSignalEvent(event) {
 
   ctx.save();
   ctx.translate(point.x, point.y);
-  ctx.fillStyle = `rgb(232 93 86 / ${red ? 0.13 + pulse * 0.08 : 0.04})`;
+  ctx.fillStyle = `rgb(232 93 86 / ${red ? 0.09 + pulse * 0.06 : 0.03})`;
   ctx.beginPath();
   ctx.arc(0, 0, 25 + pulse * 4, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "rgb(20 32 50 / 26%)";
+  ctx.fillStyle = "rgb(20 32 50 / 18%)";
   ctx.beginPath();
   ctx.ellipse(0, 15, 14, 5, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#26364a";
+  ctx.fillStyle = "#334155";
   roundedRect(-9, -18, 18, 28, 5);
   ctx.fill();
-  ctx.strokeStyle = "rgb(255 255 255 / 62%)";
+  ctx.strokeStyle = "rgb(255 255 255 / 52%)";
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  ctx.fillStyle = red ? "#e85d56" : "rgb(255 255 255 / 26%)";
+  ctx.fillStyle = red ? "#d76f66" : "rgb(255 255 255 / 24%)";
   ctx.beginPath();
   ctx.arc(0, -9, 5.2, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = red ? "rgb(255 255 255 / 26%)" : "#22d27f";
+  ctx.fillStyle = red ? "rgb(255 255 255 / 24%)" : "#4aa873";
   ctx.beginPath();
   ctx.arc(0, 1.8, 5.2, 0, Math.PI * 2);
   ctx.fill();
@@ -3224,20 +3516,20 @@ function drawRoadworkEvent(event) {
 
   ctx.save();
   ctx.translate(point.x, point.y);
-  ctx.fillStyle = `rgb(232 93 86 / ${0.08 + pulse * 0.04})`;
+  ctx.fillStyle = `rgb(232 93 86 / ${0.06 + pulse * 0.035})`;
   ctx.beginPath();
   ctx.arc(0, 0, 23 + pulse * 3, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "rgb(20 32 50 / 24%)";
+  ctx.fillStyle = "rgb(20 32 50 / 16%)";
   ctx.beginPath();
   ctx.ellipse(0, 14, 20, 6, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#e85d56";
+  ctx.fillStyle = "#d76f66";
   roundedRect(-18, -7, 36, 13, 4);
   ctx.fill();
-  ctx.fillStyle = "#ffd36a";
+  ctx.fillStyle = "#edc66b";
   ctx.save();
   ctx.beginPath();
   roundedRect(-18, -7, 36, 13, 4);
@@ -3281,11 +3573,11 @@ function drawSlowZoneEvent(event) {
   ctx.globalAlpha = alpha;
 
   if (!isCrowd) {
-    ctx.fillStyle = "rgb(82 176 209 / 42%)";
+    ctx.fillStyle = "rgb(82 176 209 / 30%)";
     ctx.beginPath();
     ctx.ellipse(0, 4, 24, 13, -0.18, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "rgb(255 255 255 / 54%)";
+    ctx.strokeStyle = "rgb(255 255 255 / 42%)";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.ellipse(-5, 1, 9, 4, -0.2, 0, Math.PI * 2);
@@ -3294,16 +3586,16 @@ function drawSlowZoneEvent(event) {
     return;
   }
 
-  drawCrowdPerson(-11, 3, "#6d5bd4");
-  drawCrowdPerson(1, -2, "#157f87");
-  drawCrowdPerson(12, 5, "#f0b42c");
+  drawCrowdPerson(-11, 3, "#7770b8");
+  drawCrowdPerson(1, -2, "#4f8990");
+  drawCrowdPerson(12, 5, "#c89b38");
   ctx.restore();
 }
 
 function drawCrowdPerson(x, y, color) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.fillStyle = "rgb(20 32 50 / 18%)";
+  ctx.fillStyle = "rgb(20 32 50 / 13%)";
   ctx.beginPath();
   ctx.ellipse(0, 10, 8, 3, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -3327,15 +3619,15 @@ function drawTailwindEvent(event) {
   ctx.rotate(event.angle);
   ctx.globalAlpha = unavailable ? 0.24 : 1;
 
-  ctx.fillStyle = `rgb(18 216 223 / ${0.12 + pulse * 0.08})`;
+  ctx.fillStyle = `rgb(18 216 223 / ${0.08 + pulse * 0.055})`;
   ctx.beginPath();
   ctx.arc(0, 0, 23 + pulse * 4, 0, Math.PI * 2);
   ctx.fill();
 
   for (let index = -1; index <= 1; index += 1) {
     const y = index * 8;
-    ctx.strokeStyle = "#12d8df";
-    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#40a6b0";
+    ctx.lineWidth = 4.2;
     ctx.lineCap = "round";
     ctx.beginPath();
     ctx.moveTo(-17, y);
@@ -3360,8 +3652,8 @@ function drawOilEvent(event) {
 
   ctx.save();
   ctx.translate(point.x, point.y);
-  ctx.globalAlpha = event.cooldown > 0 ? 0.48 : 0.9;
-  ctx.fillStyle = "rgb(45 42 76 / 62%)";
+  ctx.globalAlpha = event.cooldown > 0 ? 0.38 : 0.76;
+  ctx.fillStyle = "rgb(45 42 76 / 50%)";
   ctx.beginPath();
   ctx.ellipse(0, 5, 23, 12, 0.22, 0, Math.PI * 2);
   ctx.fill();
@@ -3385,24 +3677,24 @@ function drawElectricEvent(event) {
   ctx.save();
   ctx.translate(point.x, point.y);
   ctx.globalAlpha = event.cooldown > 0 ? 0.42 : 1;
-  ctx.fillStyle = `rgb(79 156 255 / ${0.12 + pulse * 0.1})`;
+  ctx.fillStyle = `rgb(79 156 255 / ${0.08 + pulse * 0.07})`;
   ctx.beginPath();
   ctx.arc(0, 0, 25 + pulse * 5, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "rgb(20 32 50 / 22%)";
+  ctx.fillStyle = "rgb(20 32 50 / 16%)";
   ctx.beginPath();
   ctx.ellipse(0, 15, 20, 6, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#26364a";
+  ctx.fillStyle = "#334155";
   roundedRect(-17, -9, 34, 20, 5);
   ctx.fill();
-  ctx.strokeStyle = "rgb(255 255 255 / 72%)";
+  ctx.strokeStyle = "rgb(255 255 255 / 60%)";
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  ctx.strokeStyle = "#4f9cff";
+  ctx.strokeStyle = "#5e96df";
   ctx.lineWidth = 4;
   ctx.lineJoin = "round";
   ctx.beginPath();
@@ -3430,12 +3722,12 @@ function drawStandEvent(event) {
   ctx.save();
   ctx.translate(point.x, point.y);
   ctx.globalAlpha = unavailable ? 0.4 : 1;
-  ctx.fillStyle = `rgb(240 191 57 / ${0.13 + pulse * 0.08})`;
+  ctx.fillStyle = `rgb(240 191 57 / ${0.09 + pulse * 0.06})`;
   ctx.beginPath();
   ctx.arc(0, 0, 25 + pulse * 4, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "rgb(20 32 50 / 20%)";
+  ctx.fillStyle = "rgb(20 32 50 / 15%)";
   ctx.beginPath();
   ctx.ellipse(0, 17, 22, 6, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -3447,7 +3739,7 @@ function drawStandEvent(event) {
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  ctx.fillStyle = "#e85d56";
+  ctx.fillStyle = "#d76f66";
   ctx.beginPath();
   roundedRect(-20, -15, 40, 13, 4);
   ctx.fill();
@@ -3455,16 +3747,16 @@ function drawStandEvent(event) {
   ctx.beginPath();
   roundedRect(-20, -15, 40, 13, 4);
   ctx.clip();
-  ctx.fillStyle = "#f0bf39";
+  ctx.fillStyle = "#e3b842";
   for (let x = -18; x < 20; x += 12) {
     ctx.fillRect(x, -16, 6, 15);
   }
   ctx.restore();
 
-  ctx.fillStyle = "#157f87";
+  ctx.fillStyle = "#4f8990";
   roundedRect(-8, 3, 16, 9, 3);
   ctx.fill();
-  drawStarCanvasIcon(0, -25, 0.38, "#f0bf39");
+  drawStarCanvasIcon(0, -25, 0.36, "#e3b842");
   ctx.restore();
 }
 
@@ -3472,19 +3764,19 @@ function drawShortcutEvent(event) {
   const point = toCanvasPoint(event.cell);
   const unavailable = event.cooldown > 0;
   const pulse = (Math.sin(performance.now() / 150 + event.pairId) + 1) * 0.5;
-  const color = event.pairId % 2 === 0 ? "#8e6df0" : "#12d8df";
-  const glow = event.pairId % 2 === 0 ? "142 109 240" : "18 216 223";
+  const color = event.pairId % 2 === 0 ? "#8177d3" : "#40a6b0";
+  const glow = event.pairId % 2 === 0 ? "129 119 211" : "64 166 176";
   const spin = performance.now() / 520 + event.pairId;
 
   ctx.save();
   ctx.translate(point.x, point.y);
   ctx.globalAlpha = unavailable ? 0.34 : 0.98;
-  ctx.fillStyle = `rgb(${glow} / ${0.13 + pulse * 0.1})`;
+  ctx.fillStyle = `rgb(${glow} / ${0.09 + pulse * 0.075})`;
   ctx.beginPath();
   ctx.arc(0, 0, 28 + pulse * 7, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "rgb(20 32 50 / 28%)";
+  ctx.fillStyle = "rgb(20 32 50 / 20%)";
   ctx.beginPath();
   ctx.ellipse(0, 15, 22, 6, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -3967,7 +4259,7 @@ function drawComboFocusRing() {
   const pulse = (Math.sin(performance.now() * 0.012) + 1) * 0.5;
   const radius = isRushing ? 42 + pulse * 8 : 38 + pulse * 5;
   const color = isRushing ? "18 216 223" : "240 191 57";
-  const label = isRushing ? "ターボ" : "あと1";
+  const label = isRushing ? "追い風" : "あと1";
 
   ctx.save();
   ctx.translate(x, y);
@@ -4249,7 +4541,7 @@ function drawEdgeHint(camera) {
   const point = toCanvasPoint(cell);
   const screenX = (point.x - camera.x) * camera.scale;
   const screenY = (point.y - camera.y) * camera.scale;
-  const margin = 48;
+  const margin = 58;
 
   if (
     screenX >= margin &&
@@ -4265,7 +4557,7 @@ function drawEdgeHint(camera) {
   const isDestinationTarget = activeRun.carrying && cellKey(cell) === cellKey(currentJob.destination);
   const fill = isDestinationTarget ? "#e85d56" : "#f0b42c";
   const blocks = Math.max(1, Math.ceil(distanceToCell(activeRun.player, cell) / TILE));
-  drawEdgeBadge(x, y, isDestinationTarget ? "destination" : "package", fill, `${blocks}マス`);
+  drawEdgeBadge(x, y, isDestinationTarget ? "destination" : "package", fill, `${isDestinationTarget ? "家" : "荷物"} ${blocks}マス`);
 }
 
 function drawBonusEdgeHint(camera) {
@@ -4275,7 +4567,7 @@ function drawBonusEdgeHint(camera) {
   const isWarning = activeRun.bonus.ttl <= BONUS_WARNING_TTL;
   const screenX = (point.x - camera.x) * camera.scale;
   const screenY = (point.y - camera.y) * camera.scale;
-  const margin = 46;
+  const margin = 56;
 
   if (
     screenX >= margin &&
@@ -4290,7 +4582,7 @@ function drawBonusEdgeHint(camera) {
   const y = clamp(screenY, margin, viewport.height - margin);
   const blocks = Math.max(1, Math.ceil(distanceToCell(activeRun.player, activeRun.bonus.cell) / TILE));
   const fill = isWarning ? "#ff9a7a" : "#12d8df";
-  drawEdgeBadge(x, y, "clock", fill, `${blocks}マス`);
+  drawEdgeBadge(x, y, "clock", fill, `時計 ${blocks}マス`);
 }
 
 function drawEdgeBadge(x, y, icon, fill, badgeText) {
@@ -4298,36 +4590,38 @@ function drawEdgeBadge(x, y, icon, fill, badgeText) {
   ctx.translate(x, y);
   ctx.fillStyle = "rgb(20 32 50 / 28%)";
   ctx.beginPath();
-  ctx.arc(0, 0, 23, 0, Math.PI * 2);
+  ctx.arc(0, 0, 30, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = fill;
   ctx.beginPath();
-  ctx.arc(0, 0, 17, 0, Math.PI * 2);
+  ctx.arc(0, 0, 22, 0, Math.PI * 2);
   ctx.fill();
   drawEdgeBadgeIcon(icon);
 
-  ctx.font = "1000 11px system-ui, sans-serif";
-  const badgeWidth = Math.max(42, Math.min(58, ctx.measureText(badgeText).width + 12));
+  ctx.font = "1000 12px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const badgeWidth = Math.max(58, Math.min(94, ctx.measureText(badgeText).width + 18));
   ctx.fillStyle = "rgb(20 32 50 / 82%)";
-  roundedRect(-badgeWidth / 2, 24, badgeWidth, 17, 8);
+  roundedRect(-badgeWidth / 2, 30, badgeWidth, 20, 10);
   ctx.fill();
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(badgeText, 0, 32.5);
+  ctx.fillText(badgeText, 0, 40);
   ctx.restore();
 }
 
 function drawEdgeBadgeIcon(icon) {
   if (icon === "destination") {
-    drawDestinationCanvasIcon(0, 0, 0.56);
+    drawDestinationCanvasIcon(0, 0, 0.66);
     return;
   }
 
   if (icon === "clock") {
-    drawClockCanvasIcon(0, 0, 0.68, "#10313a");
+    drawClockCanvasIcon(0, 0, 0.78, "#10313a");
     return;
   }
 
-  drawPackageCanvasIcon(0, 1, 0.52, "#d9962e");
+  drawPackageCanvasIcon(0, 1, 0.62, "#d9962e");
 }
 
 function createDailyMap(dateKey) {
@@ -4466,26 +4760,7 @@ function createSupportItems(dailyMap, rng, job, player, events = []) {
   };
   const pickupChoices = getPickupChoices(job);
   const avoidCells = [dailyMap.startCell, playerCell, job.destination, ...pickupChoices.map((choice) => choice.cell), ...events.map((event) => event.cell)];
-  const kinds = [
-    "clock",
-    "clock",
-    "clock",
-    "shield",
-    "shield",
-    "magnet",
-    "magnet",
-    "turbo",
-    "turbo",
-    "flight",
-    "flight",
-    "star",
-    "star",
-    "star",
-    "clock",
-    "magnet",
-    "turbo",
-    "flight",
-  ];
+  const kinds = getSupportItemKindsForDay();
   const selected = [];
   const items = [];
 
@@ -4505,49 +4780,87 @@ function createSupportItems(dailyMap, rng, job, player, events = []) {
   return items;
 }
 
+function getSupportItemKindsForDay() {
+  const extraKinds = {
+    clock: ["clock", "clock", "clock"],
+    shield: ["shield", "shield", "clock"],
+    magnet: ["magnet", "magnet", "clock"],
+    turbo: ["turbo", "turbo", "magnet"],
+    flight: ["flight", "flight", "shield"],
+  }[dailyModifier.key] ?? [];
+
+  return [
+    ...extraKinds,
+    "clock",
+    "clock",
+    "clock",
+    "shield",
+    "shield",
+    "magnet",
+    "magnet",
+    "turbo",
+    "turbo",
+    "flight",
+    "flight",
+    "star",
+    "star",
+    "star",
+    "clock",
+    "magnet",
+    "turbo",
+    "flight",
+  ];
+}
+
 function createRoadEvents(dailyMap, rng, job) {
   const list = [];
   const selected = [];
   const avoidCells = [dailyMap.startCell, job.destination, ...getPickupChoices(job).map((choice) => choice.cell)];
   const candidates = dailyMap.candidates.filter((cell) => avoidCells.every((avoidCell) => cellDistance(cell, avoidCell) >= 2));
   const intersections = candidates.filter((cell) => isIntersectionCell(dailyMap, cell));
+  const straightLanes = candidates.filter((cell) => isComfortableStraightCell(dailyMap, cell) && !isNearIntersectionCell(dailyMap, cell));
+  const trapLanes = straightLanes.length > 0 ? straightLanes : candidates.filter((cell) => isStraightRoadCell(dailyMap, cell));
+  const easyLanes = trapLanes.length > 0 ? trapLanes : candidates;
+  const tailwindCount = dailyModifier.key === "turbo" ? 5 : 3;
+  const electricCount = dailyModifier.key === "shield" ? 3 : 4;
+  const roadworkCount = dailyModifier.key === "shield" ? 4 : 5;
 
   addRoadEvents(list, selected, intersections, rng, avoidCells, "signal", 4, {
-    radius: 27,
+    radius: 23,
     minSpacing: 4,
     extra: () => ({
       phase: rng() * SIGNAL_CYCLE_SECONDS,
     }),
   });
   addRoadEvents(list, selected, intersections, rng, avoidCells, "rail", 2, {
-    radius: 29,
+    radius: 24,
     minSpacing: 5,
     extra: (cell) => ({
       angle: getRoadAxisAngle(dailyMap, cell, rng),
       phase: rng() * RAIL_CYCLE_SECONDS,
     }),
   });
-  addRoadEvents(list, selected, candidates, rng, avoidCells, "roadwork", 5, {
+  addRoadEvents(list, selected, easyLanes, rng, avoidCells, "roadwork", roadworkCount, {
     radius: 24,
-    minSpacing: 4,
+    minSpacing: 5,
   });
-  addRoadEvents(list, selected, candidates, rng, avoidCells, "oil", 4, {
+  addRoadEvents(list, selected, easyLanes, rng, avoidCells, "oil", 4, {
     radius: 27,
     minSpacing: 3,
   });
-  addRoadEvents(list, selected, candidates, rng, avoidCells, "electric", 4, {
+  addRoadEvents(list, selected, easyLanes, rng, avoidCells, "electric", electricCount, {
     radius: 28,
-    minSpacing: 4,
+    minSpacing: 5,
   });
-  addRoadEvents(list, selected, candidates, rng, avoidCells, "puddle", 4, {
-    radius: 28,
-    minSpacing: 3,
-  });
-  addRoadEvents(list, selected, candidates, rng, avoidCells, "crowd", 3, {
+  addRoadEvents(list, selected, easyLanes, rng, avoidCells, "puddle", 4, {
     radius: 28,
     minSpacing: 3,
   });
-  addRoadEvents(list, selected, candidates, rng, avoidCells, "tailwind", 3, {
+  addRoadEvents(list, selected, easyLanes, rng, avoidCells, "crowd", 3, {
+    radius: 28,
+    minSpacing: 3,
+  });
+  addRoadEvents(list, selected, easyLanes, rng, avoidCells, "tailwind", tailwindCount, {
     radius: 27,
     minSpacing: 4,
     extra: (cell) => ({
@@ -4662,6 +4975,46 @@ function isIntersectionCell(dailyMap, cell) {
   return horizontal && vertical;
 }
 
+function isStraightRoadCell(dailyMap, cell) {
+  const left = dailyMap.road[cell.row]?.[cell.col - 1];
+  const right = dailyMap.road[cell.row]?.[cell.col + 1];
+  const up = dailyMap.road[cell.row - 1]?.[cell.col];
+  const down = dailyMap.road[cell.row + 1]?.[cell.col];
+
+  return (left && right && !up && !down) || (up && down && !left && !right);
+}
+
+function isComfortableStraightCell(dailyMap, cell) {
+  if (!isStraightRoadCell(dailyMap, cell)) return false;
+
+  const left = dailyMap.road[cell.row]?.[cell.col - 1];
+  const right = dailyMap.road[cell.row]?.[cell.col + 1];
+  const axisCells = left && right
+    ? [
+        { col: cell.col - 1, row: cell.row },
+        { col: cell.col + 1, row: cell.row },
+      ]
+    : [
+        { col: cell.col, row: cell.row - 1 },
+        { col: cell.col, row: cell.row + 1 },
+      ];
+
+  return axisCells.every((axisCell) => isStraightRoadCell(dailyMap, axisCell));
+}
+
+function isNearIntersectionCell(dailyMap, cell) {
+  return getRoadNeighborsFromMap(dailyMap, cell).some((neighbor) => isIntersectionCell(dailyMap, neighbor));
+}
+
+function getRoadNeighborsFromMap(dailyMap, cell) {
+  return [
+    { col: cell.col + 1, row: cell.row },
+    { col: cell.col - 1, row: cell.row },
+    { col: cell.col, row: cell.row + 1 },
+    { col: cell.col, row: cell.row - 1 },
+  ].filter((neighbor) => dailyMap.road[neighbor.row]?.[neighbor.col]);
+}
+
 function getRoadEventAngle(dailyMap, cell, rng) {
   const directions = [];
   if (dailyMap.road[cell.row]?.[cell.col - 1]) directions.push(Math.PI);
@@ -4698,7 +5051,7 @@ function getRailProgress(event) {
 
 function createHazards(dailyMap) {
   const rng = mulberry32(hashString(`${todayKey}:hazards`));
-  const colors = ["#e85d56", "#157f87", "#6d5bd4", "#f0b42c"];
+  const colors = ["#c86f66", "#4f8990", "#7970b6", "#c89b38"];
   const list = [];
 
   dailyMap.horizontals.slice(0, 4).forEach((row, index) => {
@@ -4722,7 +5075,7 @@ function createHazards(dailyMap) {
       x: rng() * WORLD_WIDTH,
       y: centerOf(row),
       speed: (44 + rng() * 28) * (index % 2 === 0 ? -1 : 1),
-      color: "#26364a",
+      color: "#334155",
       nearMissCooldown: 0,
     });
   });
@@ -4735,7 +5088,7 @@ function createHazards(dailyMap) {
       x: centerOf(col),
       y: rng() * WORLD_HEIGHT,
       speed: (82 + rng() * 50) * (index % 2 === 0 ? 1 : -1),
-      color: index % 2 === 0 ? "#f0b42c" : "#12d8df",
+      color: index % 2 === 0 ? "#c89b38" : "#40a6b0",
       nearMissCooldown: 0,
     });
   });
@@ -4748,7 +5101,7 @@ function createHazards(dailyMap) {
       x: rng() * WORLD_WIDTH,
       y: centerOf(row),
       speed: (92 + rng() * 42) * (index % 2 === 0 ? -1 : 1),
-      color: "#22d27f",
+      color: "#4aa873",
       nearMissCooldown: 0,
     });
   });
@@ -4990,20 +5343,23 @@ function isWalkable(x, y, radius) {
 }
 
 function isGroundWalkable(x, y, radius) {
-  const cornerRadius = radius * 0.62;
+  if (!isRoadAtPoint(x, y)) return false;
+
+  const hitRadius = radius * getCollisionRadiusScale();
   const points = [
-    [x, y],
-    [x - radius, y],
-    [x + radius, y],
-    [x, y - radius],
-    [x, y + radius],
-    [x - cornerRadius, y - cornerRadius],
-    [x + cornerRadius, y - cornerRadius],
-    [x - cornerRadius, y + cornerRadius],
-    [x + cornerRadius, y + cornerRadius],
+    [x - hitRadius, y],
+    [x + hitRadius, y],
+    [x, y - hitRadius],
+    [x, y + hitRadius],
   ];
 
-  return points.every(([pointX, pointY]) => isRoadAtPoint(pointX, pointY));
+  const blocked = points.filter(([pointX, pointY]) => !isRoadAtPoint(pointX, pointY)).length;
+  return blocked <= 2;
+}
+
+function getCollisionRadiusScale() {
+  if (activeRun?.rush > 0 || activeRun?.flight > 0) return RUSH_COLLISION_RADIUS_SCALE;
+  return COLLISION_RADIUS_SCALE;
 }
 
 function resolveFlightLanding() {
@@ -5043,7 +5399,42 @@ function findNearestLandingPoint(point) {
 function isRoadAtPoint(pointX, pointY) {
   const col = Math.floor(pointX / TILE);
   const row = Math.floor(pointY / TILE);
-  return row >= 0 && row < ROWS && col >= 0 && col < COLS && map.road[row][col];
+  if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return false;
+  if (map.road[row][col]) return true;
+  return isInsideRoundedBuildingCutout(pointX, pointY, col, row);
+}
+
+function isInsideRoundedBuildingCutout(pointX, pointY, col, row) {
+  const localX = pointX - col * TILE;
+  const localY = pointY - row * TILE;
+  const radii = getBuildingCornerRadii(col, row, BUILDING_CORNER_RADIUS);
+
+  return (
+    isOutsideCorner(localX, localY, "topLeft", radii.topLeft) ||
+    isOutsideCorner(localX, localY, "topRight", radii.topRight) ||
+    isOutsideCorner(localX, localY, "bottomRight", radii.bottomRight) ||
+    isOutsideCorner(localX, localY, "bottomLeft", radii.bottomLeft)
+  );
+}
+
+function isOutsideCorner(localX, localY, corner, radius) {
+  if (radius <= 0) return false;
+
+  const centers = {
+    topLeft: [radius, radius],
+    topRight: [TILE - radius, radius],
+    bottomRight: [TILE - radius, TILE - radius],
+    bottomLeft: [radius, TILE - radius],
+  };
+  const [centerX, centerY] = centers[corner];
+  const isCornerSquare =
+    (corner === "topLeft" && localX < radius && localY < radius) ||
+    (corner === "topRight" && localX > TILE - radius && localY < radius) ||
+    (corner === "bottomRight" && localX > TILE - radius && localY > TILE - radius) ||
+    (corner === "bottomLeft" && localX < radius && localY > TILE - radius);
+
+  if (!isCornerSquare) return false;
+  return Math.hypot(localX - centerX, localY - centerY) > radius;
 }
 
 function centerOf(index) {
@@ -5104,7 +5495,7 @@ function renderTodayRankingMarkup(records) {
           <span class="rank-index">${crown}<em>${index + 1}</em></span>
           <span>
             <span class="rank-name">${escapeHtml(record.randomName)}</span>
-            <span class="rank-meta">${isCurrent ? "今回 / " : ""}${record.deliveries}配達 / ${record.combo}連続</span>
+            <span class="rank-meta">${isCurrent ? "今回 / " : ""}${record.deliveries}便 / ${record.combo}連便</span>
           </span>
           <span class="rank-score">${formatNumber(record.score)}</span>
         </li>
@@ -5136,7 +5527,7 @@ function renderWeekRankingRow(dateKey, todayDate) {
       <span class="week-day">${getWeekdayLabel(dateKey)}</span>
       <span>
         <span class="week-name">${escapeHtml(top.randomName)}</span>
-        <span class="week-meta">${top.deliveries}配達 / ${top.combo}連続</span>
+        <span class="week-meta">${top.deliveries}便 / ${top.combo}連便</span>
       </span>
       <span class="week-score">${formatNumber(top.score)}</span>
     </div>
@@ -5329,6 +5720,41 @@ function roundedRect(x, y, width, height, radius, drawingContext = ctx) {
   drawingContext.quadraticCurveTo(x, y, x + r, y);
 }
 
+function roundedRectCorners(x, y, width, height, radii, drawingContext = ctx) {
+  const topLeft = Math.min(radii.topLeft ?? 0, width / 2, height / 2);
+  const topRight = Math.min(radii.topRight ?? 0, width / 2, height / 2);
+  const bottomRight = Math.min(radii.bottomRight ?? 0, width / 2, height / 2);
+  const bottomLeft = Math.min(radii.bottomLeft ?? 0, width / 2, height / 2);
+
+  drawingContext.beginPath();
+  drawingContext.moveTo(x + topLeft, y);
+  drawingContext.lineTo(x + width - topRight, y);
+  if (topRight > 0) {
+    drawingContext.quadraticCurveTo(x + width, y, x + width, y + topRight);
+  } else {
+    drawingContext.lineTo(x + width, y);
+  }
+  drawingContext.lineTo(x + width, y + height - bottomRight);
+  if (bottomRight > 0) {
+    drawingContext.quadraticCurveTo(x + width, y + height, x + width - bottomRight, y + height);
+  } else {
+    drawingContext.lineTo(x + width, y + height);
+  }
+  drawingContext.lineTo(x + bottomLeft, y + height);
+  if (bottomLeft > 0) {
+    drawingContext.quadraticCurveTo(x, y + height, x, y + height - bottomLeft);
+  } else {
+    drawingContext.lineTo(x, y + height);
+  }
+  drawingContext.lineTo(x, y + topLeft);
+  if (topLeft > 0) {
+    drawingContext.quadraticCurveTo(x, y, x + topLeft, y);
+  } else {
+    drawingContext.lineTo(x, y);
+  }
+  drawingContext.closePath();
+}
+
 function hashString(value) {
   let hash = 2166136261;
 
@@ -5395,6 +5821,21 @@ function getWeekdayAccent(dateKey) {
 }
 
 function getDailyCityName(dateKey) {
+  return getDailyMission(dateKey).cityLabel;
+}
+
+function getDailyModifier(dateKey) {
+  const modifiers = [
+    { key: "clock", label: "時計多め" },
+    { key: "shield", label: "甲羅守り多め" },
+    { key: "magnet", label: "磁石多め" },
+    { key: "turbo", label: "追い風多め" },
+    { key: "flight", label: "ひこうき多め" },
+  ];
+  return modifiers[hashString(`${dateKey}:modifier`) % modifiers.length];
+}
+
+function getDailyMission(dateKey) {
   const rng = mulberry32(hashString(`${dateKey}:city-name`));
   const cityAdjectives = [
     "にぎやかな",
@@ -5426,7 +5867,34 @@ function getDailyCityName(dateKey) {
   ];
   const adjective = cityAdjectives[Math.floor(rng() * cityAdjectives.length)];
   const noun = cityNouns[Math.floor(rng() * cityNouns.length)];
-  return `今日の街 ${adjective}${noun}`;
+  const requesters = [
+    "青空商店街",
+    "駅前のパン屋",
+    "港の食堂",
+    "時計坂の雑貨店",
+    "花咲き横丁",
+    "屋台通り",
+    "中央通りの店番",
+    "水路沿いのカフェ",
+  ];
+  const parcels = [
+    "急ぎの荷物",
+    "忘れもの",
+    "できたて弁当",
+    "祭りの小包",
+    "道具箱",
+    "おみやげ袋",
+    "修理パーツ",
+    "招待状",
+  ];
+  const requester = requesters[Math.floor(rng() * requesters.length)];
+  const parcel = parcels[Math.floor(rng() * parcels.length)];
+
+  return {
+    cityLabel: `今日の街 ${adjective}${noun}`,
+    short: `${requester}へ、${parcel}`,
+    summary: `${requester}へ、${parcel}を甲羅便で届ける`,
+  };
 }
 
 function formatNumber(value) {
@@ -5447,6 +5915,72 @@ function formatSignedNumber(value) {
   if (value === 0) return "0";
   const sign = value > 0 ? "+" : "-";
   return `${sign}${formatNumber(Math.abs(value))}`;
+}
+
+function resumeAudio() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+
+  if (!audioContext) {
+    audioContext = new AudioContextClass();
+  }
+
+  if (audioContext.state === "suspended") {
+    audioContext.resume().catch(() => {});
+  }
+
+  return audioContext;
+}
+
+function playCue(kind) {
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
+  const context = resumeAudio();
+  if (!context || context.state === "closed") return;
+
+  const patterns = {
+    start: [
+      [520, 0, 0.055],
+      [760, 0.06, 0.07],
+    ],
+    pickup: [[660, 0, 0.05]],
+    delivery: [
+      [640, 0, 0.055],
+      [920, 0.055, 0.075],
+    ],
+    item: [
+      [780, 0, 0.045],
+      [1040, 0.045, 0.055],
+    ],
+    half: [
+      [520, 0, 0.06],
+      [690, 0.065, 0.08],
+    ],
+    hit: [[190, 0, 0.09]],
+    finish: [
+      [580, 0, 0.08],
+      [760, 0.075, 0.09],
+      [980, 0.16, 0.11],
+    ],
+  };
+
+  (patterns[kind] ?? []).forEach(([frequency, delay, duration]) => {
+    playTone(context, frequency, delay, duration);
+  });
+}
+
+function playTone(context, frequency, delay, duration) {
+  const startAt = context.currentTime + delay;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(frequency, startAt);
+  gain.gain.setValueAtTime(0.0001, startAt);
+  gain.gain.exponentialRampToValueAtTime(SOUND_VOLUME, startAt + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(startAt);
+  oscillator.stop(startAt + duration + 0.02);
 }
 
 function vibrate(pattern) {

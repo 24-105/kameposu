@@ -1,0 +1,2 @@
+[functions.ranking]
+verify_jwt = false

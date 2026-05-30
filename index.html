@@ -77,14 +77,14 @@
           </div>
           <div class="top-actions">
             <button id="startButton" class="primary-button" type="button">
-              開始
+              配達へ
             </button>
           </div>
         </header>
 
-        <div class="hud" aria-label="ゲーム状況">
+        <div class="hud" aria-label="かめ便の状況">
           <div class="time-card">
-            <span>残り</span>
+            <span>時間</span>
             <strong id="timeValue">60.0</strong>
             <small id="timePhase" class="time-phase" aria-hidden="true"></small>
             <div id="timeGauge" class="time-gauge" aria-hidden="true">
@@ -102,11 +102,11 @@
             ></small>
           </div>
           <div>
-            <span>配達</span>
+            <span>お届け</span>
             <strong id="deliveryValue">0</strong>
           </div>
           <div class="combo-card">
-            <span>連続</span>
+            <span>連便</span>
             <strong id="comboValue">0</strong>
             <div id="comboMeter" class="combo-meter" aria-hidden="true">
               <i></i>
@@ -126,32 +126,31 @@
             かめぽす便は、日替わりの街で荷物を拾って家へ届ける1分間の無料ブラウザゲームです。
           </canvas>
           <div id="startGuide" class="start-guide" aria-live="polite">
-            <strong>線の先へ進む</strong>
-            <div class="guide-flow" aria-label="荷物を拾って家に届ける">
-              <span class="guide-token guide-token-pickup"
-                ><canvas
-                  class="guide-symbol-canvas"
-                  data-guide-icon="package"
-                  width="46"
-                  height="46"
-                  aria-hidden="true"
-                ></canvas
-                ><em>荷物を拾う</em></span
-              >
-              <i aria-hidden="true">→</i>
-              <span class="guide-token guide-token-destination"
-                ><canvas
-                  class="guide-symbol-canvas"
-                  data-guide-icon="destination"
-                  width="46"
-                  height="46"
-                  aria-hidden="true"
-                ></canvas
-                ><em>家に届ける</em></span
-              >
+            <strong>バッグを甲羅にのせて家へ</strong>
+            <div class="guide-story" aria-label="今日のかめ便">
+              <span>今日のかめ便</span>
+              <strong id="guideStoryCopy">祭り前の商店街へ、急ぎの荷物を届ける</strong>
             </div>
-            <small>黄色の線は荷物へ、赤の線は家へ続きます</small>
-            <small>道をなぞって移動</small>
+            <div class="guide-demo" aria-label="線の見本">
+              <div class="guide-demo-map" aria-hidden="true">
+                <span class="guide-demo-road guide-demo-road-horizontal"></span>
+                <span class="guide-demo-road guide-demo-road-vertical"></span>
+                <span class="guide-demo-route guide-demo-route-pickup"></span>
+                <span class="guide-demo-route guide-demo-route-delivery"></span>
+                <span class="guide-demo-turtle"></span>
+                <span class="guide-demo-package"></span>
+                <span class="guide-demo-home"></span>
+              </div>
+              <p>
+                <b>黄色線</b><span>バッグへ</span><i>赤線</i><span>家へ</span>
+              </p>
+            </div>
+            <div class="guide-rules" aria-label="基本ルール">
+              <span class="guide-rule-control">道をなぞるとカメが進む</span>
+            </div>
+            <button id="guideStartButton" class="guide-start-button" type="button">
+              配達に行く
+            </button>
             <div class="guide-actions">
               <button
                 id="homeRankingButton"
@@ -176,44 +175,56 @@
             aria-live="polite"
           >
             <div class="pause-panel">
-              <h2>一時停止</h2>
+              <h2>甲羅でひと休み</h2>
               <div class="pause-guide" aria-label="ルール説明">
-                <strong>線の先へ進む</strong>
-                <div class="guide-flow" aria-label="荷物を拾って家に届ける">
-                  <span class="guide-token guide-token-pickup"
-                    ><canvas
-                      class="guide-symbol-canvas"
-                      data-guide-icon="package"
-                      width="46"
-                      height="46"
-                      aria-hidden="true"
-                    ></canvas
-                    ><em>拾う</em></span
-                  >
-                  <i aria-hidden="true">→</i>
-                  <span class="guide-token guide-token-destination"
-                    ><canvas
-                      class="guide-symbol-canvas"
-                      data-guide-icon="destination"
-                      width="46"
-                      height="46"
-                      aria-hidden="true"
-                    ></canvas
-                    ><em>届ける</em></span
-                  >
+                <strong>バッグを甲羅にのせて家へ</strong>
+                <div class="guide-demo" aria-label="線の見本">
+                  <div class="guide-demo-map" aria-hidden="true">
+                    <span class="guide-demo-road guide-demo-road-horizontal"></span>
+                    <span class="guide-demo-road guide-demo-road-vertical"></span>
+                    <span class="guide-demo-route guide-demo-route-pickup"></span>
+                    <span class="guide-demo-route guide-demo-route-delivery"></span>
+                    <span class="guide-demo-turtle"></span>
+                    <span class="guide-demo-package"></span>
+                    <span class="guide-demo-home"></span>
+                  </div>
+                  <p>
+                    <b>黄色線</b><span>バッグへ</span><i>赤線</i><span>家へ</span>
+                  </p>
                 </div>
-                <small>黄色の線は荷物へ、赤の線は家へ続きます</small>
+                <div class="guide-rules" aria-label="基本ルール">
+                  <span class="guide-rule-control">道をなぞるとカメが進む</span>
+                </div>
+                <div class="control-mode-switch" aria-label="操作方法">
+                  <span>操作方法</span>
+                  <button
+                    type="button"
+                    data-control-mode-option="drag"
+                    aria-label="画面をなぞって操作"
+                    aria-pressed="true"
+                  >
+                    画面をなぞる
+                  </button>
+                  <button
+                    type="button"
+                    data-control-mode-option="pad"
+                    aria-label="下の十字キーで操作"
+                    aria-pressed="false"
+                  >
+                    下の十字キー
+                  </button>
+                </div>
               </div>
               <div class="pause-actions">
                 <button id="resumeButton" class="primary-button" type="button">
-                  再開
+                  配達へ戻る
                 </button>
                 <button
                   id="pauseRetryButton"
                   class="secondary-button"
                   type="button"
                 >
-                  もう一度
+                  走り直す
                 </button>
               </div>
               <div class="pause-menu-actions" aria-label="一時停止中のメニュー">
@@ -236,7 +247,14 @@
           </div>
         </div>
 
-        <div id="itemBar" class="item-bar" aria-label="手持ちアイテム">
+        <div id="stickPad" class="stick-pad" aria-label="下部スティック操作">
+          <button type="button" data-dir="up" aria-label="上へ進む">▲</button>
+          <button type="button" data-dir="left" aria-label="左へ進む">◀</button>
+          <button type="button" data-dir="down" aria-label="下へ進む">▼</button>
+          <button type="button" data-dir="right" aria-label="右へ進む">▶</button>
+        </div>
+
+        <div id="itemBar" class="item-bar" aria-label="カメ配達員の道具">
           <button
             class="item-button"
             type="button"
@@ -252,44 +270,44 @@
             class="item-button"
             type="button"
             data-manual-item="shield"
-            aria-label="シールドを使う"
+            aria-label="甲羅守りを使う"
             disabled
           >
             <span class="item-icon item-icon-shield" aria-hidden="true"></span>
-            <span>シールド</span>
+            <span>甲羅守り</span>
             <strong data-item-count>1</strong>
           </button>
           <button
             class="item-button"
             type="button"
             data-manual-item="magnet"
-            aria-label="マグネットを使う"
+            aria-label="磁石を使う"
             disabled
           >
             <span class="item-icon item-icon-magnet" aria-hidden="true"></span>
-            <span>マグネット</span>
+            <span>磁石</span>
             <strong data-item-count>1</strong>
           </button>
           <button
             class="item-button"
             type="button"
             data-manual-item="turbo"
-            aria-label="ターボを使う"
+            aria-label="追い風を使う"
             disabled
           >
             <span class="item-icon item-icon-bolt" aria-hidden="true"></span>
-            <span>ターボ</span>
+            <span>追い風</span>
             <strong data-item-count>1</strong>
           </button>
           <button
             class="item-button"
             type="button"
             data-manual-item="flight"
-            aria-label="飛行を使う"
+            aria-label="ひこうきを使う"
             disabled
           >
             <span class="item-icon item-icon-flight" aria-hidden="true"></span>
-            <span>飛行</span>
+            <span>ひこうき</span>
             <strong data-item-count>0</strong>
           </button>
         </div>
@@ -348,6 +366,23 @@
                   </span>
                   <b aria-hidden="true">遊ぶ</b>
                 </a>
+                <a
+                  class="recommend-card"
+                  href="https://24-105.github.io/machi-narabe/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="おすすめゲーム: まちならべ"
+                >
+                  <span class="recommend-card-art recommend-card-art-city" aria-hidden="true">
+                    <span class="recommend-city-icon"></span>
+                  </span>
+                  <span class="recommend-card-copy">
+                    <em>街づくりパズル</em>
+                    <strong>まちならべ</strong>
+                    <small>同じ建物を3つつなげて街を育てる</small>
+                  </span>
+                  <b aria-hidden="true">遊ぶ</b>
+                </a>
               </div>
             </section>
           </div>
@@ -363,15 +398,16 @@
           <div class="game-set-heading">
             <div>
               <div class="result-headline">
-                <h2>配達完了</h2>
+                <h2>お届け完了</h2>
                 <strong id="resultGrade" class="result-grade grade-d"
                   ><span>ランク</span><b>D</b></strong
                 >
               </div>
               <div class="result-name-line">
-                <span>配達員名</span>
+                <span>カメ配達員</span>
                 <strong id="resultName">-</strong>
               </div>
+              <p id="resultMissionLine" class="result-mission-line">今日のかめ便</p>
               <span id="resultBestBadge" class="result-best-badge is-hidden"
                 >自己最高更新</span
               >
@@ -380,7 +416,7 @@
 
           <div class="result-insight">
             <div>
-              <span>今日の順位</span>
+              <span>今日の番付</span>
               <strong id="resultRank">-</strong>
             </div>
             <div class="result-score-hero">
@@ -392,13 +428,25 @@
 
           <p id="resultTip" class="result-tip">-</p>
 
+          <section class="result-next-card" aria-label="次回の狙い">
+            <div class="result-next-heading">
+              <span>次の一便</span>
+              <strong>甲羅メモ</strong>
+            </div>
+            <div
+              id="resultNextMoves"
+              class="retry-cues"
+              aria-label="次回の狙い"
+            ></div>
+          </section>
+
           <div class="result-retry-dock">
             <button
               id="retryButton"
               class="primary-button retry-dock-button"
               type="button"
             >
-              もう一度
+              もう一便
             </button>
           </div>
 
@@ -412,7 +460,7 @@
               aria-selected="true"
               aria-controls="resultSummaryPanel"
             >
-              結果
+              配達メモ
             </button>
             <button
               id="resultTabRanking"
@@ -467,14 +515,8 @@
               </div>
 
               <div class="result-divider">
-                <span>次の一手</span>
+                <span>スコア内訳</span>
               </div>
-
-              <div
-                id="resultNextMoves"
-                class="retry-cues"
-                aria-label="次回の狙い"
-              ></div>
 
               <div
                 id="resultBreakdown"
@@ -484,11 +526,11 @@
 
               <div class="result-grid">
                 <div>
-                  <span>届けた数</span>
+                  <span>お届け数</span>
                   <strong id="resultDeliveries">0</strong>
                 </div>
                 <div>
-                  <span>連続成功</span>
+                  <span>連便</span>
                   <strong id="resultCombo">0</strong>
                 </div>
                 <div>
@@ -496,19 +538,19 @@
                   <strong id="resultItemClock">0</strong>
                 </div>
                 <div>
-                  <span>シールド</span>
+                  <span>甲羅守り</span>
                   <strong id="resultItemShield">0</strong>
                 </div>
                 <div>
-                  <span>マグネット</span>
+                  <span>磁石</span>
                   <strong id="resultItemMagnet">0</strong>
                 </div>
                 <div>
-                  <span>ターボ</span>
+                  <span>追い風</span>
                   <strong id="resultItemTurbo">0</strong>
                 </div>
                 <div>
-                  <span>飛行</span>
+                  <span>ひこうき</span>
                   <strong id="resultItemFlight">0</strong>
                 </div>
                 <div>
@@ -575,11 +617,28 @@
                 </span>
                 <b aria-hidden="true">遊ぶ</b>
               </a>
+              <a
+                class="recommend-card"
+                href="https://24-105.github.io/machi-narabe/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="おすすめゲーム: まちならべ"
+              >
+                <span class="recommend-card-art recommend-card-art-city" aria-hidden="true">
+                  <span class="recommend-city-icon"></span>
+                </span>
+                <span class="recommend-card-copy">
+                  <em>街づくりパズル</em>
+                  <strong>まちならべ</strong>
+                  <small>同じ建物を3つつなげて街を育てる</small>
+                </span>
+                <b aria-hidden="true">遊ぶ</b>
+              </a>
             </div>
           </section>
 
           <p class="thanks-card">
-            <span>また配達しに来てね。</span>
+            <span>また甲羅便を届けに来てね。</span>
           </p>
         </div>
       </section>

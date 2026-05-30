@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.supabase/
+supabase/.temp/
+.env
+.env.*
+.DS_Store
+*.log
+*.zip
+*.mp4
+*.webm
+promo-frames/
