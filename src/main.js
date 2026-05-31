@@ -25,8 +25,6 @@ const TOUCH_FULL_TILT_PIXELS = 58;
 const INPUT_AXIS_SNAP_RATIO = 3.2;
 const CAMERA_IDLE_Y_ANCHOR = 0.28;
 const CAMERA_DEFAULT_Y_ANCHOR = 0.54;
-const CAMERA_TOUCH_Y_ANCHOR = 0.4;
-const CAMERA_TOUCH_X_SHIFT = 0.1;
 const SCORE_KEY = "delivery-panic-session-scores-v1";
 const PROFILE_KEY = "kameposu-player-profile-v1";
 const CONTROL_MODE_KEY = "kameposu-control-mode-v1";
@@ -3476,18 +3474,7 @@ function getCameraAnchor() {
     return { x: 0.5, y: CAMERA_IDLE_Y_ANCHOR };
   }
 
-  if (activeRun.status !== "running" || !touchControl.active) {
-    return { x: 0.5, y: CAMERA_DEFAULT_Y_ANCHOR };
-  }
-
-  const isTouchingLowerHalf = touchControl.originY > viewport.height * 0.48;
-  const isTouchingLeft = touchControl.originX < viewport.width * 0.42;
-  const isTouchingRight = touchControl.originX > viewport.width * 0.58;
-
-  return {
-    x: isTouchingLeft ? 0.5 + CAMERA_TOUCH_X_SHIFT : isTouchingRight ? 0.5 - CAMERA_TOUCH_X_SHIFT : 0.5,
-    y: isTouchingLowerHalf ? CAMERA_TOUCH_Y_ANCHOR : CAMERA_DEFAULT_Y_ANCHOR,
-  };
+  return { x: 0.5, y: CAMERA_DEFAULT_Y_ANCHOR };
 }
 
 function drawMap() {
@@ -7164,10 +7151,20 @@ function distanceToSegment(pointX, pointY, startX, startY, endX, endY) {
 
 function renderRankings() {
   const records = getTodayScores(todayKey);
-  const todayMarkup = renderTodayRankingMarkup(records);
+  const latestRecord = getLatestResultRecord();
+  const ownRecord = getOwnRankingRecord(todayKey);
+  const todayMarkup = renderTodayRankingMarkup(records, {
+    highlightRecord: latestRecord,
+    highlightPrefix: COPY.rankingText.currentPrefix,
+  });
+  const homeRecords = mergeRankingDisplayRecords(records, ownRecord ? [ownRecord] : []);
+  const homeTodayMarkup = renderTodayRankingMarkup(homeRecords, {
+    highlightRecord: ownRecord,
+    highlightPrefix: COPY.rankingText.ownPrefix,
+  });
 
   if (todayRanking) todayRanking.innerHTML = todayMarkup;
-  if (homeTodayRanking) homeTodayRanking.innerHTML = todayMarkup;
+  if (homeTodayRanking) homeTodayRanking.innerHTML = homeTodayMarkup;
 
   const todayDate = parseJstDateKey(todayKey);
   const weekMarkup = weekDates
@@ -7299,39 +7296,59 @@ function getLatestResultRecord() {
   return loadSessionScores().find((record) => record.createdAt === latestResultCreatedAt) ?? null;
 }
 
-function renderTodayRankingMarkup(records) {
+function getOwnRankingRecord(dateKey) {
+  const playerName = loadPlayerProfile().lastPlayerName;
+  if (!playerName) return null;
+
+  return (
+    loadSessionScores()
+      .filter((record) => record.dateKey === dateKey && record.randomName === playerName)
+      .sort(compareRankingRecords)[0] ?? null
+  );
+}
+
+function mergeRankingDisplayRecords(records, extraRecords) {
+  return dedupeScoreSubmissions(mergeScoreRecords(records, extraRecords).sort(compareRankingRecords));
+}
+
+function renderTodayRankingMarkup(records, options = {}) {
   if (records.length === 0) {
     return `<li class="ranking-empty">${COPY.rankingText.empty}</li>`;
   }
 
-  const topRows = records.slice(0, 10).map((record, index) => renderTodayRankingRow(record, index));
-  const currentIndex = records.findIndex((record) => isLatestResultRecord(record));
+  const topRows = records.slice(0, 10).map((record, index) => renderTodayRankingRow(record, index, options));
+  const currentIndex = records.findIndex((record) => isHighlightedRankingRecord(record, options.highlightRecord));
 
   if (currentIndex >= 10) {
     topRows.push('<li class="ranking-gap" aria-hidden="true">...</li>');
-    topRows.push(renderTodayRankingRow(records[currentIndex], currentIndex));
+    topRows.push(renderTodayRankingRow(records[currentIndex], currentIndex, options));
   }
 
   return topRows.join("");
 }
 
-function renderTodayRankingRow(record, index) {
-  const isCurrent = isLatestResultRecord(record);
+function renderTodayRankingRow(record, index, options = {}) {
+  const isCurrent = isHighlightedRankingRecord(record, options.highlightRecord);
   const podiumClass = index < 3 ? `is-podium is-podium-${index + 1}` : "";
   const crown = index < 3 ? `<b class="rank-crown" aria-hidden="true">♛</b>` : "";
   const topGap = isCurrent && index > 0 ? getTopGapLabel(record, todayKey) : "";
   const meta = copyText(COPY.rankingText.meta, { deliveries: record.deliveries, combo: record.combo });
+  const prefix = isCurrent ? (options.highlightPrefix ?? COPY.rankingText.currentPrefix) : "";
   return `
     <li class="ranking-row ${podiumClass} ${isCurrent ? "is-current" : ""}">
       <span class="rank-index">${crown}<em>${index + 1}</em></span>
       <span>
         <span class="rank-name">${escapeHtml(record.randomName)}</span>
-        <span class="rank-meta">${isCurrent ? COPY.rankingText.currentPrefix : ""}${meta}</span>
+        <span class="rank-meta">${prefix}${meta}</span>
         ${topGap ? `<span class="rank-gap-text">${topGap}</span>` : ""}
       </span>
       <span class="rank-score">${formatNumber(record.score)}</span>
     </li>
   `;
+}
+
+function isHighlightedRankingRecord(record, highlightRecord) {
+  return !!highlightRecord && isSameScoreSubmission(record, highlightRecord);
 }
 
 function getTopGapLabel(record, dateKey) {
@@ -7519,11 +7536,6 @@ function savePlayerName(randomName) {
 
 function isValidPlayerName(randomName) {
   return typeof randomName === "string" && /^[ぁ-んァ-ン一-龥々ー]{2,16}$/.test(randomName);
-}
-
-function isLatestResultRecord(record) {
-  const latest = getLatestResultRecord();
-  return !!latest && isSameScoreSubmission(record, latest);
 }
 
 function isSameScoreSubmission(left, right) {

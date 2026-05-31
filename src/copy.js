@@ -163,6 +163,7 @@ window.KAMEPOSU_COPY = Object.freeze({
     rankGap: "あと{score}で{rank}位",
     topGap: "1位との差 {score}",
     currentPrefix: "今回 / ",
+    ownPrefix: "自分 / ",
     meta: "{deliveries}便 / {combo}連便",
     empty: "まだ記録なし",
   }),
