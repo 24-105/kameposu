@@ -887,15 +887,6 @@ body.is-rush #gameCanvas,
   white-space: nowrap;
 }
 
-.start-guide.is-compact {
-  gap: 8px;
-}
-
-.start-guide.is-compact .guide-demo,
-.start-guide.is-compact .guide-rules {
-  display: none;
-}
-
 .guide-demo {
   display: grid;
   gap: 5px;

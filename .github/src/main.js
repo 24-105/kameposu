@@ -30,7 +30,6 @@ const CAMERA_TOUCH_X_SHIFT = 0.1;
 const SCORE_KEY = "delivery-panic-session-scores-v1";
 const PROFILE_KEY = "kameposu-player-profile-v1";
 const CONTROL_MODE_KEY = "kameposu-control-mode-v1";
-const GUIDE_SEEN_KEY = "kameposu-guide-seen-v1";
 const BLANK_FAVICON_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 const MAX_CARRY_PACKAGES = 3;
 const MIN_VISIBLE_PACKAGES = 5;
@@ -77,6 +76,7 @@ const HELI_DELIVERY_SECONDS = 1.15;
 const MAX_FLOAT_TEXTS = 7;
 const MAX_SCREEN_TEXTS = 4;
 const RANKING_API_TIMEOUT_MS = 3200;
+const SCORE_SUBMISSION_MATCH_WINDOW_MS = 5 * 60 * 1000;
 const MANUAL_CLOCK_SECONDS = 4.0;
 const SOUND_VOLUME = 0.035;
 const MANUAL_ITEM_STARTING_STOCK = {
@@ -335,7 +335,6 @@ const dailyMission = getDailyMission(todayKey);
 dateLabel.textContent = `${dailyMission.cityLabel}・${dailyModifier.label}`;
 guideStoryCopy.textContent = dailyMission.summary;
 if (guideMissionMeta) guideMissionMeta.textContent = `${dailyMission.conditionText} / +${dailyMission.reward}`;
-startGuide.classList.toggle("is-compact", hasSeenGuide());
 setControlMode(controlMode, false);
 updateManualItems();
 updateHud();
@@ -356,7 +355,7 @@ if ("ResizeObserver" in window) {
 
 startButton.addEventListener("click", handlePrimaryButton);
 guideStartButton.addEventListener("click", startCountdown);
-retryButton.addEventListener("click", startCountdown);
+retryButton.addEventListener("click", showRetryGuide);
 resumeButton.addEventListener("click", resumeRun);
 pauseRetryButton.addEventListener("click", restartFromPause);
 pauseRankingButton.addEventListener("click", () => openMenuScreen("ranking"));
@@ -521,22 +520,6 @@ function setControlMode(nextMode, shouldSave = true) {
   }
 }
 
-function hasSeenGuide() {
-  try {
-    return localStorage.getItem(GUIDE_SEEN_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function markGuideSeen() {
-  try {
-    localStorage.setItem(GUIDE_SEEN_KEY, "1");
-  } catch {
-    // 保存できない環境では、毎回見本を出す。
-  }
-}
-
 function handlePrimaryButton() {
   if (activeRun.status === "countdown" || activeRun.status === "running") {
     pauseRun();
@@ -553,8 +536,6 @@ function startCountdown() {
 
   resumeAudio();
   playCue("start");
-  markGuideSeen();
-  startGuide.classList.add("is-compact");
 
   const isRetryStart = activeRun.status === "ended" || document.body.classList.contains("show-results");
   if (activeRun.status !== "idle") {
@@ -587,6 +568,34 @@ function startCountdown() {
     lastFrameTime = performance.now();
     animationFrame = requestAnimationFrame(tick);
   }
+}
+
+function showRetryGuide() {
+  if (activeRun.status === "countdown" || activeRun.status === "running" || activeRun.status === "finishing") {
+    return;
+  }
+
+  applyPreparedRun(createPreparedRun("idle"));
+  resetInput();
+  closeMenuScreen();
+  document.body.classList.remove("show-results");
+  document.body.classList.remove("is-result-best");
+  document.body.classList.remove("is-result-top-grade");
+  document.body.classList.remove("is-rush");
+  document.body.classList.remove("is-last-spurt");
+  timeCard.classList.remove("is-danger");
+  gameSetScreen.classList.add("is-hidden");
+  gameSetScreen.scrollTop = 0;
+  pauseOverlay.classList.add("is-hidden");
+  countdownOverlay.classList.add("is-hidden");
+  countdownOverlay.classList.remove("is-finish");
+  startGuide.classList.remove("is-hidden");
+  startButton.disabled = false;
+  startButton.textContent = COPY.buttons.todayDelivery;
+  updateManualItems();
+  updateHud();
+  drawScene();
+  window.scrollTo(0, 0);
 }
 
 function createPreparedRun(status = "idle") {
@@ -964,7 +973,7 @@ function createFreshRun(status = "countdown") {
   return {
     status,
     rng: mulberry32(runSeed),
-    randomName: generateRandomPlayerName(Math.random),
+    randomName: getRunPlayerName(Math.random),
     score: 0,
     scoreDelta: 0,
     scorePulse: 0,
@@ -2702,7 +2711,7 @@ function activateResultTab(tabName) {
 
 function getRankInfo(record) {
   const records = getTodayScores(record.dateKey);
-  const index = records.findIndex((item) => item.createdAt === record.createdAt);
+  const index = records.findIndex((item) => isSameScoreSubmission(item, record));
   const fallbackIndex = records.findIndex((item) => item.score <= record.score);
   const rank = index >= 0 ? index + 1 : fallbackIndex >= 0 ? fallbackIndex + 1 : records.length + 1;
 
@@ -7296,7 +7305,7 @@ function renderTodayRankingMarkup(records) {
   }
 
   const topRows = records.slice(0, 10).map((record, index) => renderTodayRankingRow(record, index));
-  const currentIndex = records.findIndex((record) => record.createdAt === latestResultCreatedAt);
+  const currentIndex = records.findIndex((record) => isLatestResultRecord(record));
 
   if (currentIndex >= 10) {
     topRows.push('<li class="ranking-gap" aria-hidden="true">...</li>');
@@ -7307,7 +7316,7 @@ function renderTodayRankingMarkup(records) {
 }
 
 function renderTodayRankingRow(record, index) {
-  const isCurrent = record.createdAt === latestResultCreatedAt;
+  const isCurrent = isLatestResultRecord(record);
   const podiumClass = index < 3 ? `is-podium is-podium-${index + 1}` : "";
   const crown = index < 3 ? `<b class="rank-crown" aria-hidden="true">♛</b>` : "";
   const topGap = isCurrent && index > 0 ? getTopGapLabel(record, todayKey) : "";
@@ -7327,7 +7336,7 @@ function renderTodayRankingRow(record, index) {
 
 function getTopGapLabel(record, dateKey) {
   const top = getTodayScores(dateKey)[0];
-  if (!top || top.createdAt === record.createdAt) return "";
+  if (!top || isSameScoreSubmission(top, record)) return "";
   const gap = Math.max(1, top.score - record.score + 1);
   return copyText(COPY.rankingText.topGap, { score: formatNumber(gap) });
 }
@@ -7366,11 +7375,26 @@ function getTodayScores(dateKey) {
   const onlineRecords = getOnlineScoresForDate(dateKey);
   if (onlineRecords) {
     const currentRecord = loadSessionScores().find((record) => record.dateKey === dateKey && record.createdAt === latestResultCreatedAt);
-    return mergeScoreRecords(onlineRecords, currentRecord ? [currentRecord] : []).sort((a, b) => b.score - a.score);
+    const shouldIncludeCurrent = currentRecord && !onlineRecords.some((record) => isSameScoreSubmission(record, currentRecord));
+    return dedupeScoreSubmissions(mergeScoreRecords(onlineRecords, shouldIncludeCurrent ? [currentRecord] : []).sort(compareRankingRecords));
   }
 
   const session = loadSessionScores().filter((record) => record.dateKey === dateKey);
-  return session.sort((a, b) => b.score - a.score);
+  return dedupeScoreSubmissions(session.sort(compareRankingRecords));
+}
+
+function compareRankingRecords(a, b) {
+  return b.score - a.score || Date.parse(a.createdAt) - Date.parse(b.createdAt);
+}
+
+function dedupeScoreSubmissions(records) {
+  const uniqueRecords = [];
+  records.forEach((record) => {
+    if (!uniqueRecords.some((existing) => isSameScoreSubmission(existing, record))) {
+      uniqueRecords.push(record);
+    }
+  });
+  return uniqueRecords;
 }
 
 function getOnlineScoresForDate(dateKey) {
@@ -7461,7 +7485,7 @@ function loadPlayerProfile() {
 
 function sanitizePlayerProfile(profile) {
   const lastPlayerName =
-    typeof profile.lastPlayerName === "string" && /^[ぁ-んァ-ン一-龥々ー]{2,16}$/.test(profile.lastPlayerName)
+    isValidPlayerName(profile.lastPlayerName)
       ? profile.lastPlayerName
       : "";
 
@@ -7471,6 +7495,63 @@ function sanitizePlayerProfile(profile) {
     totalDeliveries: sanitizeInteger(profile.totalDeliveries, 0, 999999),
     totalPlays: sanitizeInteger(profile.totalPlays, 0, 99999),
   };
+}
+
+function getRunPlayerName(randomSource) {
+  const profile = loadPlayerProfile();
+  if (profile.lastPlayerName) return profile.lastPlayerName;
+
+  const randomName = generateRandomPlayerName(randomSource);
+  savePlayerName(randomName);
+  return randomName;
+}
+
+function savePlayerName(randomName) {
+  if (!isValidPlayerName(randomName)) return;
+
+  try {
+    const current = loadPlayerProfile();
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...current, lastPlayerName: randomName }));
+  } catch {
+    // 名前を保存できない環境でも、今回のプレイはそのまま続ける。
+  }
+}
+
+function isValidPlayerName(randomName) {
+  return typeof randomName === "string" && /^[ぁ-んァ-ン一-龥々ー]{2,16}$/.test(randomName);
+}
+
+function isLatestResultRecord(record) {
+  const latest = getLatestResultRecord();
+  return !!latest && isSameScoreSubmission(record, latest);
+}
+
+function isSameScoreSubmission(left, right) {
+  if (!left || !right) return false;
+  if (getScoreSubmissionKey(left) !== getScoreSubmissionKey(right)) return false;
+  if (left.createdAt === right.createdAt) return true;
+  if (left.createdAt === latestResultCreatedAt || right.createdAt === latestResultCreatedAt) return true;
+  return isCloseSubmissionTime(left.createdAt, right.createdAt);
+}
+
+function getScoreSubmissionKey(record) {
+  return [
+    record.dateKey,
+    record.randomName,
+    record.score,
+    record.mapSeed,
+    record.deliveries,
+    record.combo,
+    record.collisions,
+    record.nearMisses ?? 0,
+  ].join("|");
+}
+
+function isCloseSubmissionTime(leftCreatedAt, rightCreatedAt) {
+  const leftTime = Date.parse(leftCreatedAt);
+  const rightTime = Date.parse(rightCreatedAt);
+  if (!Number.isFinite(leftTime) || !Number.isFinite(rightTime)) return false;
+  return Math.abs(leftTime - rightTime) <= SCORE_SUBMISSION_MATCH_WINDOW_MS;
 }
 
 function sanitizeSessionScoreRecord(record) {

@@ -25,21 +25,33 @@
     <meta property="og:locale" content="ja_JP" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="かめぽす便" />
-    <meta property="og:title" content="かめぽす便 | 1分で遊べるカメの配達ゲーム" />
+    <meta
+      property="og:title"
+      content="かめぽす便 | 1分で遊べるカメの配達ゲーム"
+    />
     <meta
       property="og:description"
       content="カメの配達員がバッグを拾って家へ届ける、スマホ向けの無料ブラウザゲーム。ログインなしですぐ遊べます。"
     />
     <meta property="og:url" content="https://24-105.github.io/kameposu/" />
-    <meta property="og:image" content="https://24-105.github.io/kameposu/favicon.svg" />
+    <meta
+      property="og:image"
+      content="https://24-105.github.io/kameposu/favicon.svg"
+    />
     <meta property="og:image:alt" content="かめぽす便のアプリアイコン" />
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="かめぽす便 | 1分で遊べるカメの配達ゲーム" />
+    <meta
+      name="twitter:title"
+      content="かめぽす便 | 1分で遊べるカメの配達ゲーム"
+    />
     <meta
       name="twitter:description"
       content="カメの配達員がバッグを拾って家へ届ける、スマホ向けの無料ブラウザゲーム。"
     />
-    <meta name="twitter:image" content="https://24-105.github.io/kameposu/favicon.svg" />
+    <meta
+      name="twitter:image"
+      content="https://24-105.github.io/kameposu/favicon.svg"
+    />
     <title>かめぽす便 | 1分で遊べるカメの配達ゲーム</title>
     <link rel="canonical" href="https://24-105.github.io/kameposu/" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
@@ -58,7 +70,13 @@
         "operatingSystem": "iOS, Android, Web",
         "gamePlatform": ["Web browser", "Mobile browser"],
         "inLanguage": "ja",
-        "genre": ["配達ゲーム", "アクションゲーム", "タイムアタック", "ブラウザゲーム", "スマホゲーム"],
+        "genre": [
+          "配達ゲーム",
+          "アクションゲーム",
+          "タイムアタック",
+          "ブラウザゲーム",
+          "スマホゲーム"
+        ],
         "playMode": "SinglePlayer",
         "isAccessibleForFree": true,
         "offers": {
@@ -98,23 +116,20 @@
               type="button"
               data-copy="ui.ranking"
               data-copy-aria-label="ui.rankingAria"
-            >
-            </button>
+            ></button>
             <button
               id="recommendButton"
               class="guide-action guide-action-recommend"
               type="button"
               data-copy="ui.recommendations"
               data-copy-aria-label="ui.recommendationsAria"
-            >
-            </button>
+            ></button>
             <button
               id="startButton"
               class="primary-button"
               type="button"
               data-copy="buttons.todayDelivery"
-            >
-            </button>
+            ></button>
           </div>
         </header>
 
@@ -190,8 +205,7 @@
               class="guide-start-button"
               type="button"
               data-copy="buttons.todayDelivery"
-            >
-            </button>
+            ></button>
           </div>
           <div id="countdownOverlay" class="countdown-overlay is-hidden"></div>
           <div
@@ -205,10 +219,18 @@
                 <strong data-copy="ui.guideTitle"></strong>
                 <div class="guide-demo" data-copy-aria-label="ui.guideDemoAria">
                   <div class="guide-demo-map" aria-hidden="true">
-                    <span class="guide-demo-road guide-demo-road-horizontal"></span>
-                    <span class="guide-demo-road guide-demo-road-vertical"></span>
-                    <span class="guide-demo-route guide-demo-route-pickup"></span>
-                    <span class="guide-demo-route guide-demo-route-delivery"></span>
+                    <span
+                      class="guide-demo-road guide-demo-road-horizontal"
+                    ></span>
+                    <span
+                      class="guide-demo-road guide-demo-road-vertical"
+                    ></span>
+                    <span
+                      class="guide-demo-route guide-demo-route-pickup"
+                    ></span>
+                    <span
+                      class="guide-demo-route guide-demo-route-delivery"
+                    ></span>
                     <span class="guide-demo-trace"></span>
                     <span class="guide-demo-finger"></span>
                     <span class="guide-demo-turtle"></span>
@@ -229,16 +251,14 @@
                     data-copy="ui.dragControl"
                     data-copy-aria-label="ui.dragControlAria"
                     aria-pressed="true"
-                  >
-                  </button>
+                  ></button>
                   <button
                     type="button"
                     data-control-mode-option="pad"
                     data-copy="ui.padControl"
                     data-copy-aria-label="ui.padControlAria"
                     aria-pressed="false"
-                  >
-                  </button>
+                  ></button>
                 </div>
               </div>
               <div class="pause-actions">
@@ -247,15 +267,13 @@
                   class="primary-button"
                   type="button"
                   data-copy="buttons.resume"
-                >
-                </button>
+                ></button>
                 <button
                   id="pauseRetryButton"
                   class="secondary-button"
                   type="button"
                   data-copy="buttons.restart"
-                >
-                </button>
+                ></button>
               </div>
               <div class="pause-menu-actions" aria-label="一時停止中のメニュー">
                 <button
@@ -263,14 +281,20 @@
                   class="guide-action guide-action-ranking"
                   type="button"
                 >
-                  <span class="pause-action-label" data-copy="ui.ranking"></span>
+                  <span
+                    class="pause-action-label"
+                    data-copy="ui.ranking"
+                  ></span>
                 </button>
                 <button
                   id="pauseRecommendButton"
                   class="guide-action guide-action-recommend"
                   type="button"
                 >
-                  <span class="pause-action-label" data-copy="ui.recommendations"></span>
+                  <span
+                    class="pause-action-label"
+                    data-copy="ui.recommendations"
+                  ></span>
                 </button>
               </div>
             </div>
@@ -281,7 +305,9 @@
           <button type="button" data-dir="up" aria-label="上へ進む">▲</button>
           <button type="button" data-dir="left" aria-label="左へ進む">◀</button>
           <button type="button" data-dir="down" aria-label="下へ進む">▼</button>
-          <button type="button" data-dir="right" aria-label="右へ進む">▶</button>
+          <button type="button" data-dir="right" aria-label="右へ進む">
+            ▶
+          </button>
         </div>
 
         <div id="itemBar" class="item-bar" aria-label="カメ配達員の道具">
@@ -341,8 +367,7 @@
               class="secondary-button menu-close-button"
               type="button"
               data-copy="buttons.back"
-            >
-            </button>
+            ></button>
           </div>
 
           <div id="menuRankingPanel" class="menu-content">
@@ -362,7 +387,10 @@
           </div>
 
           <div id="menuRecommendPanel" class="menu-content" hidden>
-            <section class="recommend-block" data-copy-aria-label="ui.recommendBlockAria">
+            <section
+              class="recommend-block"
+              data-copy-aria-label="ui.recommendBlockAria"
+            >
               <div class="recommend-heading">
                 <span data-copy="ui.nextPlay"></span>
                 <strong data-copy="ui.mobileGames"></strong>
@@ -399,7 +427,10 @@
                   rel="noopener noreferrer"
                   data-copy-aria-label="ui.recommendCardAria"
                 >
-                  <span class="recommend-card-art recommend-card-art-city" aria-hidden="true">
+                  <span
+                    class="recommend-card-art recommend-card-art-city"
+                    aria-hidden="true"
+                  >
                     <img
                       class="recommend-favicon"
                       src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
@@ -418,12 +449,15 @@
                 </a>
                 <a
                   class="recommend-card"
-                  href="https://24-105.github.io/hitoyo-saishucho/"
+                  href="https://24-105.github.io/hitoyo-saisyucho/"
                   target="_blank"
                   rel="noopener noreferrer"
                   data-copy-aria-label="ui.recommendCardAria"
                 >
-                  <span class="recommend-card-art recommend-card-art-night" aria-hidden="true">
+                  <span
+                    class="recommend-card-art recommend-card-art-night"
+                    aria-hidden="true"
+                  >
                     <img
                       class="recommend-favicon"
                       src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
@@ -452,7 +486,11 @@
         aria-live="polite"
       >
         <div class="game-set-panel">
-          <div id="resultCelebration" class="result-celebration is-hidden" aria-hidden="true"></div>
+          <div
+            id="resultCelebration"
+            class="result-celebration is-hidden"
+            aria-hidden="true"
+          ></div>
           <div class="game-set-heading">
             <div>
               <div class="result-headline">
@@ -465,19 +503,26 @@
                 <span data-copy="ui.turtleCourier"></span>
                 <strong id="resultName">-</strong>
               </div>
-              <p id="resultMissionLine" class="result-mission-line">今日のかめ便</p>
-              <span id="resultBestBadge" class="result-best-badge is-hidden"
-                data-copy="result.bestUpdated"></span
-              >
+              <p id="resultMissionLine" class="result-mission-line">
+                今日のかめ便
+              </p>
+              <span
+                id="resultBestBadge"
+                class="result-best-badge is-hidden"
+                data-copy="result.bestUpdated"
+              ></span>
               <div id="resultShareBox" class="result-share-box is-hidden">
-                <button id="resultShareButton" type="button" data-copy="share.button"></button>
+                <button
+                  id="resultShareButton"
+                  type="button"
+                  data-copy="share.button"
+                ></button>
                 <button
                   id="resultShareImageButton"
                   class="result-share-image-button"
                   type="button"
                   data-copy="share.imageButton"
-                >
-                </button>
+                ></button>
                 <span id="resultShareStatus" aria-live="polite"></span>
               </div>
             </div>
@@ -501,13 +546,15 @@
               class="primary-button retry-dock-button"
               type="button"
               data-copy="buttons.retry"
-            >
-            </button>
+            ></button>
           </div>
 
           <p id="resultTip" class="result-tip">-</p>
 
-          <section class="result-next-card" data-copy-aria-label="ui.resultTargetAria">
+          <section
+            class="result-next-card"
+            data-copy-aria-label="ui.resultTargetAria"
+          >
             <div class="result-next-heading">
               <span data-copy="ui.nextDelivery"></span>
               <strong data-copy="ui.turtleMemo"></strong>
@@ -519,7 +566,11 @@
             ></div>
           </section>
 
-          <div class="result-tabs" role="tablist" data-copy-aria-label="ui.resultTabsAria">
+          <div
+            class="result-tabs"
+            role="tablist"
+            data-copy-aria-label="ui.resultTabsAria"
+          >
             <button
               id="resultTabSummary"
               class="result-tab is-active"
@@ -529,8 +580,7 @@
               aria-selected="true"
               aria-controls="resultSummaryPanel"
               data-copy="ui.deliveryMemo"
-            >
-            </button>
+            ></button>
             <button
               id="resultTabRanking"
               class="result-tab"
@@ -540,8 +590,7 @@
               aria-selected="false"
               aria-controls="resultRankingPanel"
               data-copy="ui.ranking"
-            >
-            </button>
+            ></button>
           </div>
 
           <section
@@ -568,8 +617,7 @@
               aria-expanded="false"
               aria-controls="resultDetailPanel"
               data-copy="ui.detailOpen"
-            >
-            </button>
+            ></button>
 
             <div id="resultDetailPanel" class="detail-panel" hidden>
               <div class="best-strip">
@@ -578,7 +626,10 @@
                   <strong id="resultSessionBest">0</strong>
                 </div>
                 <div>
-                  <span id="resultBestDeltaLabel" data-copy="result.bestTarget"></span>
+                  <span
+                    id="resultBestDeltaLabel"
+                    data-copy="result.bestTarget"
+                  ></span>
                   <strong id="resultBestDelta">-</strong>
                 </div>
               </div>
@@ -708,7 +759,10 @@
                 rel="noopener noreferrer"
                 data-copy-aria-label="ui.recommendCardAria"
               >
-                <span class="recommend-card-art recommend-card-art-city" aria-hidden="true">
+                <span
+                  class="recommend-card-art recommend-card-art-city"
+                  aria-hidden="true"
+                >
                   <img
                     class="recommend-favicon"
                     src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
@@ -727,12 +781,15 @@
               </a>
               <a
                 class="recommend-card"
-                href="https://24-105.github.io/hitoyo-saishucho/"
+                href="https://24-105.github.io/hitoyo-saisyucho/"
                 target="_blank"
                 rel="noopener noreferrer"
                 data-copy-aria-label="ui.recommendCardAria"
               >
-                <span class="recommend-card-art recommend-card-art-night" aria-hidden="true">
+                <span
+                  class="recommend-card-art recommend-card-art-night"
+                  aria-hidden="true"
+                >
                   <img
                     class="recommend-favicon"
                     src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
