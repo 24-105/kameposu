@@ -1,30 +1,36 @@
 const GAME_SECONDS = 60;
+if (!window.KAMEPOSU_COPY) throw new Error("KAMEPOSU_COPY is required");
+const COPY = window.KAMEPOSU_COPY;
+const ROUNDED_FONT_FAMILY =
+  '"Hiragino Maru Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif';
 const COUNTDOWN_STEP_MS = 800;
 const START_COUNTDOWN_MS = COUNTDOWN_STEP_MS * 4;
 const RETRY_COUNTDOWN_MS = START_COUNTDOWN_MS;
 const FINISH_ANNOUNCE_MS = 2200;
 const WARP_SECONDS = 0.55;
 const SECOND_HALF_SECONDS = 30;
-const LAST_SPURT_SECONDS = 12;
+const LAST_SPURT_SECONDS = 10;
 const COLS = 38;
 const ROWS = 28;
 const TILE = 40;
 const WORLD_WIDTH = COLS * TILE;
 const WORLD_HEIGHT = ROWS * TILE;
 const PLAYER_RADIUS = 10;
-const COLLISION_RADIUS_SCALE = 0.58;
-const RUSH_COLLISION_RADIUS_SCALE = 0.5;
+const COLLISION_RADIUS_SCALE = 0.5;
+const RUSH_COLLISION_RADIUS_SCALE = 0.46;
 const BUILDING_CORNER_RADIUS = 13;
 const MAX_MOVE_STEP_PIXELS = 4.8;
 const TOUCH_DEADZONE_PIXELS = 9;
 const TOUCH_FULL_TILT_PIXELS = 58;
-const INPUT_AXIS_SNAP_RATIO = 2.15;
+const INPUT_AXIS_SNAP_RATIO = 3.2;
 const CAMERA_IDLE_Y_ANCHOR = 0.28;
 const CAMERA_DEFAULT_Y_ANCHOR = 0.54;
 const CAMERA_TOUCH_Y_ANCHOR = 0.4;
 const CAMERA_TOUCH_X_SHIFT = 0.1;
 const SCORE_KEY = "delivery-panic-session-scores-v1";
+const PROFILE_KEY = "kameposu-player-profile-v1";
 const CONTROL_MODE_KEY = "kameposu-control-mode-v1";
+const GUIDE_SEEN_KEY = "kameposu-guide-seen-v1";
 const BLANK_FAVICON_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 const MAX_CARRY_PACKAGES = 3;
 const MIN_VISIBLE_PACKAGES = 5;
@@ -69,10 +75,12 @@ const DELIVERY_POST_SCORE = 88;
 const HELI_DELIVERY_SCORE = 105;
 const HELI_DELIVERY_SECONDS = 1.15;
 const MAX_FLOAT_TEXTS = 7;
+const MAX_SCREEN_TEXTS = 4;
+const RANKING_API_TIMEOUT_MS = 3200;
 const MANUAL_CLOCK_SECONDS = 4.0;
 const SOUND_VOLUME = 0.035;
 const MANUAL_ITEM_STARTING_STOCK = {
-  clock: 1,
+  clock: 0,
   shield: 1,
   magnet: 1,
   turbo: 1,
@@ -90,7 +98,6 @@ const startButton = document.querySelector("#startButton");
 const dateLabel = document.querySelector("#dateLabel");
 const timeValue = document.querySelector("#timeValue");
 const timeCard = timeValue.closest("div");
-const timePhase = document.querySelector("#timePhase");
 const timeGaugeFill = document.querySelector("#timeGauge i");
 const scoreValue = document.querySelector("#scoreValue");
 const scoreCard = scoreValue.closest("div");
@@ -110,6 +117,7 @@ const homeRankingButton = document.querySelector("#homeRankingButton");
 const recommendButton = document.querySelector("#recommendButton");
 const startGuide = document.querySelector("#startGuide");
 const guideStoryCopy = document.querySelector("#guideStoryCopy");
+const guideMissionMeta = document.querySelector("#guideMissionMeta");
 const guideStartButton = document.querySelector("#guideStartButton");
 const itemBar = document.querySelector("#itemBar");
 const menuScreen = document.querySelector("#menuScreen");
@@ -137,12 +145,19 @@ const resultItemCounts = {
 const resultMaxCarry = document.querySelector("#resultMaxCarry");
 const resultCollisions = document.querySelector("#resultCollisions");
 const resultNearMisses = document.querySelector("#resultNearMisses");
+const resultTotalDeliveries = document.querySelector("#resultTotalDeliveries");
+const resultTotalPlays = document.querySelector("#resultTotalPlays");
 const resultRank = document.querySelector("#resultRank");
 const resultGap = document.querySelector("#resultGap");
 const resultTip = document.querySelector("#resultTip");
 const resultHighlights = document.querySelector("#resultHighlights");
 const resultMedals = document.querySelector("#resultMedals");
+const resultCelebration = document.querySelector("#resultCelebration");
 const resultBestBadge = document.querySelector("#resultBestBadge");
+const resultShareBox = document.querySelector("#resultShareBox");
+const resultShareButton = document.querySelector("#resultShareButton");
+const resultShareImageButton = document.querySelector("#resultShareImageButton");
+const resultShareStatus = document.querySelector("#resultShareStatus");
 const resultSessionBest = document.querySelector("#resultSessionBest");
 const resultBestDeltaLabel = document.querySelector("#resultBestDeltaLabel");
 const resultBestDelta = document.querySelector("#resultBestDelta");
@@ -161,6 +176,8 @@ const resultTabPanels = {
 };
 const guideIconCanvases = [...document.querySelectorAll("[data-guide-icon]")];
 const controlModeButtons = [...document.querySelectorAll("[data-control-mode-option]")];
+
+applyStaticCopy();
 
 const directionState = {
   up: false,
@@ -198,159 +215,6 @@ const keyToDirection = {
   KeyD: "right",
 };
 
-const adjectives = [
-  "夜風に強い",
-  "薔薇色の",
-  "左折だけ優雅な",
-  "自称伝説の",
-  "白手袋の",
-  "信号待ちの貴公子",
-  "月明かりの",
-  "路地裏のカリスマ",
-  "坂道育ちの",
-  "香水つよめの",
-  "雨上がりの",
-  "片手で決める",
-  "沈黙の",
-  "やたら姿勢の良い",
-  "夕焼けを背負う",
-  "名刺だけ豪華な",
-  "秒速で照れる",
-  "小声の革命家",
-  "まばたき多めの",
-  "港区っぽい",
-  "前髪が決まった",
-  "低音ボイスの",
-  "レシートを愛す",
-  "遠回りの美学",
-  "秒針に追われる",
-  "珈琲片手の",
-  "見ずに確認する",
-  "横断歩道の主役",
-  "気配だけ速い",
-  "伝票に微笑む",
-  "地図より自信の",
-  "角を曲がる詩人",
-  "朝焼けの紳士",
-  "夜景に詳しい",
-  "無駄にまぶしい",
-  "余韻が長い",
-  "一礼して走る",
-  "口ぐせが任せろの",
-  "少し遅れた救世主",
-  "箱を抱く哲学者",
-  "ベルを鳴らさぬ",
-  "風向きを読む",
-  "余裕のふりをした",
-  "影まで整った",
-  "小粋な",
-  "胸ポケットの",
-  "秘密めいた",
-  "やけに丁寧な",
-];
-
-const middleNames = [
-  "系の",
-  "風の",
-  "めの",
-  "派の",
-  "味の",
-  "型の",
-  "枠の",
-  "係の",
-  "役の",
-  "組の",
-  "班の",
-  "流の",
-  "寄りの",
-  "っぽい",
-  "気味の",
-  "仕立ての",
-  "担当の",
-  "専用の",
-  "向けの",
-  "生まれの",
-  "育ちの",
-  "印の",
-  "色の",
-  "顔の",
-  "声の",
-  "足の",
-  "目の",
-  "手の",
-  "朝の",
-  "昼の",
-  "夜の",
-  "路地の",
-  "駅前の",
-  "角の",
-  "坂の",
-  "風味の",
-  "気分の",
-  "ノリの",
-  "ままの",
-  "だけの",
-  "までの",
-  "からの",
-  "よりの",
-  "ほどの",
-  "ぶりの",
-  "中の",
-  "前の",
-  "後の",
-];
-
-const nouns = [
-  "段ボール侯爵",
-  "伝票の王子",
-  "路地裏紳士",
-  "再配達名人",
-  "置き配鑑定士",
-  "信号待ち伯爵",
-  "ターボ番長",
-  "角刈り菓子職人",
-  "スコア紳士",
-  "横断歩道の主役",
-  "雨合羽大臣",
-  "レシート男爵",
-  "呼び鈴いらずの貴族",
-  "坂道浪漫派",
-  "荷台の詩人",
-  "時間延長殿下",
-  "港町伊達男",
-  "小包奇術師",
-  "伝説の新人",
-  "郵便受け博士",
-  "近道探究家",
-  "遠回り一家言",
-  "踏切見張り番",
-  "台車の帝王",
-  "商店街の看板役",
-  "封筒師範",
-  "運転席伯爵",
-  "運動靴公爵",
-  "珈琲牛乳侍",
-  "請求書若旦那",
-  "安全確認の達人",
-  "右折浪漫",
-  "左折殿下",
-  "番地の達人",
-  "玄関前舞踊家",
-  "紙袋紳士",
-  "領収書王",
-  "時短の貴公子",
-  "地図読まない派",
-  "帽子の支配人",
-  "朝礼横綱",
-  "夕焼け走者",
-  "路面の名探偵",
-  "荷物界の新星",
-  "ボタン押し名人",
-  "呼び鈴職人",
-  "直感走者",
-  "微笑みの配達王",
-];
-
 const shortNameAdjectives = [
   "ぽすぽす",
   "ふわっと",
@@ -371,38 +235,35 @@ const shortNameAdjectives = [
   "むにゅ",
   "ぴかぴか",
   "ちょい",
-  "ほろよい",
   "ニヤリ",
   "キラリ",
-  "スイスイ",
-  "ポケット",
+  "ぽてぽて",
+  "ふにゃり",
   "カメ",
   "バッグ",
   "ベル",
   "ポスト",
-  "ターボ",
   "ミニ",
-  "路地裏",
-  "夕焼け",
-  "雨上がり",
-  "角待ち",
-  "前髪",
+  "夕やけ",
+  "雨あがり",
+  "角まち",
   "夜風",
+  "まるい",
+  "すやすや",
+  "きびきび",
+  "くるり",
+  "ほんのり",
+  "おすまし",
+  "うきうき",
 ];
 
 const shortNameLinks = [
   "の",
-  "な",
   "系",
   "風",
   "派",
   "味",
-  "顔",
   "組",
-  "流",
-  "班",
-  "色",
-  "係",
 ];
 
 const shortNameNouns = [
@@ -410,13 +271,12 @@ const shortNameNouns = [
   "ポスト係",
   "ベル係",
   "バッグ番",
-  "箱もち",
-  "地図もち",
-  "道草王",
-  "お届け屋",
-  "小包さん",
+  "地図さん",
+  "道くさ便",
+  "配達屋",
+  "バッグさん",
   "配達っこ",
-  "荷物くん",
+  "バッグくん",
   "玄関番",
   "右まがり",
   "左まがり",
@@ -424,57 +284,63 @@ const shortNameNouns = [
   "坂道さん",
   "紙袋さん",
   "番地メモ",
-  "時計もち",
-  "ワープ係",
-  "ターボ屋",
-  "シールダー",
-  "マグネット屋",
-  "ゆる王",
-  "あせり屋",
-  "すまし屋",
+  "時計さん",
+  "ワープ便",
+  "追い風便",
+  "磁石さん",
+  "ゆる便",
+  "あせり便",
+  "すまし便",
   "まよい便",
   "近道っこ",
-  "遠回り屋",
-  "呼び鈴屋",
+  "遠回り便",
+  "呼び鈴さん",
   "台車くん",
   "封筒さん",
-  "レシート係",
-  "領収書屋",
-  "荷台もち",
   "看板さん",
   "安全番",
-  "夕焼け便",
-  "雨合羽さん",
-  "路地の王",
+  "夕やけ便",
+  "雨がっぱさん",
+  "路地っこ",
+  "甲羅さん",
+  "庭先便",
+  "お手紙さん",
+  "小道さん",
+  "朝いち便",
 ];
 
 const todayKey = getJstDateKey(new Date());
 const dailyModifier = getDailyModifier(todayKey);
 const map = createDailyMap(todayKey);
-const baseNpcScores = buildNpcScoresForDate(todayKey, 12);
 const weekDates = getCurrentWeekDateKeys(todayKey);
+const rankingApiUrl = getRankingApiUrl();
 
 let animationFrame = 0;
 let lastFrameTime = performance.now();
 let countdownUntil = 0;
 let countdownDurationMs = START_COUNTDOWN_MS;
 let latestResultCreatedAt = "";
+let latestSharePayload = null;
 let activeRun;
 let currentJob;
 let roadEvents;
 let supportItems;
 let hazards;
 let audioContext = null;
+let onlineRanking = createOnlineRankingState();
 
 applyPreparedRun(createPreparedRun("idle"));
 
 const dailyMission = getDailyMission(todayKey);
 dateLabel.textContent = `${dailyMission.cityLabel}・${dailyModifier.label}`;
 guideStoryCopy.textContent = dailyMission.summary;
+if (guideMissionMeta) guideMissionMeta.textContent = `${dailyMission.conditionText} / +${dailyMission.reward}`;
+startGuide.classList.toggle("is-compact", hasSeenGuide());
 setControlMode(controlMode, false);
 updateManualItems();
 updateHud();
 renderRankings();
+void loadOnlineRankings();
 loadRecommendCards();
 drawScene();
 renderGuideIcons();
@@ -507,6 +373,8 @@ resultTabButtons.forEach((button) => {
 resultDetailToggle.addEventListener("click", () => {
   setResultDetailExpanded(resultDetailPanel.hidden);
 });
+resultShareButton?.addEventListener("click", shareLatestResult);
+resultShareImageButton?.addEventListener("click", saveLatestResultImage);
 itemBar.addEventListener("click", (event) => {
   const button = event.target.closest("[data-manual-item]");
   if (!button || button.disabled) return;
@@ -653,6 +521,22 @@ function setControlMode(nextMode, shouldSave = true) {
   }
 }
 
+function hasSeenGuide() {
+  try {
+    return localStorage.getItem(GUIDE_SEEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markGuideSeen() {
+  try {
+    localStorage.setItem(GUIDE_SEEN_KEY, "1");
+  } catch {
+    // 保存できない環境では、毎回見本を出す。
+  }
+}
+
 function handlePrimaryButton() {
   if (activeRun.status === "countdown" || activeRun.status === "running") {
     pauseRun();
@@ -669,6 +553,8 @@ function startCountdown() {
 
   resumeAudio();
   playCue("start");
+  markGuideSeen();
+  startGuide.classList.add("is-compact");
 
   const isRetryStart = activeRun.status === "ended" || document.body.classList.contains("show-results");
   if (activeRun.status !== "idle") {
@@ -680,10 +566,12 @@ function startCountdown() {
   countdownUntil = performance.now() + countdownDurationMs;
   resetInput();
   startButton.disabled = false;
-  startButton.textContent = "ひと休み";
+  startButton.textContent = COPY.buttons.rest;
   updateManualItems();
   closeMenuScreen();
   document.body.classList.remove("show-results");
+  document.body.classList.remove("is-result-best");
+  document.body.classList.remove("is-result-top-grade");
   document.body.classList.remove("is-rush");
   document.body.classList.remove("is-last-spurt");
   timeCard.classList.remove("is-danger");
@@ -733,7 +621,7 @@ function openMenuScreen(panelName) {
   if (activeRun.status === "countdown" || activeRun.status === "running" || activeRun.status === "finishing") return;
 
   const isRecommend = panelName === "recommend";
-  menuTitle.textContent = isRecommend ? "おすすめ" : "ランキング";
+  menuTitle.textContent = isRecommend ? COPY.ui.recommendations : COPY.ui.ranking;
   menuRankingPanel.hidden = isRecommend;
   menuRecommendPanel.hidden = !isRecommend;
   renderRankings();
@@ -746,6 +634,27 @@ function openMenuScreen(panelName) {
 function closeMenuScreen() {
   document.body.classList.remove("show-menu");
   menuScreen.classList.add("is-hidden");
+}
+
+function applyStaticCopy() {
+  document.querySelectorAll("[data-copy]").forEach((element) => {
+    const value = getCopyValue(element.dataset.copy);
+    if (typeof value === "string") element.textContent = value;
+  });
+
+  document.querySelectorAll("[data-copy-aria-label]").forEach((element) => {
+    const value = getCopyValue(element.dataset.copyAriaLabel);
+    if (typeof value === "string") element.setAttribute("aria-label", value);
+  });
+}
+
+function getCopyValue(path) {
+  if (!path) return "";
+  return path.split(".").reduce((current, key) => current?.[key], COPY);
+}
+
+function copyText(template, values = {}) {
+  return String(template ?? "").replace(/\{(\w+)\}/g, (_, key) => values[key] ?? "");
 }
 
 function loadRecommendCards() {
@@ -850,7 +759,10 @@ function applyRecommendPageMeta(card, meta) {
   card.querySelector("small").textContent = description;
   card.classList.toggle("is-empty-meta", !title && !description && !genre);
 
-  card.setAttribute("aria-label", title ? `おすすめゲーム: ${title}` : "おすすめゲーム");
+  card.setAttribute(
+    "aria-label",
+    title ? `${COPY.ui.recommendCardAria}: ${title}` : COPY.ui.recommendCardAria,
+  );
 }
 
 function getMetaContent(page, selectors) {
@@ -914,6 +826,20 @@ function stripRecommendTitle(text, options = {}) {
   const parts = normalized.split(/\s*[|｜\-–—]\s*/).filter(Boolean);
   if (options.keepSubtitle && parts.length > 1) return parts.slice(1).join(" ");
   return parts[0] || normalized;
+}
+
+function getRankingApiUrl() {
+  const fromWindow = typeof window.KAMEPOSU_RANKING_API_URL === "string" ? window.KAMEPOSU_RANKING_API_URL : "";
+  const fromMeta = document.querySelector('meta[name="kameposu-ranking-api"]')?.getAttribute("content") ?? "";
+  return (fromWindow || fromMeta).trim().replace(/\/+$/, "");
+}
+
+function createOnlineRankingState() {
+  return {
+    dateKey: "",
+    today: null,
+    week: null,
+  };
 }
 
 function pickBriefRecommendText(values, maxLength) {
@@ -1014,7 +940,7 @@ function resumeRun() {
 
   pauseOverlay.classList.add("is-hidden");
   startButton.disabled = false;
-  startButton.textContent = "ひと休み";
+  startButton.textContent = COPY.buttons.rest;
   updateManualItems();
 
   if (!animationFrame) {
@@ -1052,11 +978,14 @@ function createFreshRun(status = "countdown") {
     bonuses: 0,
     supportPickups: 0,
     itemPickups: createEmptyItemPickups(),
+    itemDescriptionSeen: {},
     manualUses: 0,
     manualItems: createManualItemStock(),
+    dailyMissionRewarded: false,
     nearMisses: 0,
     maxCarry: 0,
     secondHalfAnnounced: false,
+    lastSpurtAnnounced: false,
     timeLeft: GAME_SECONDS,
     carrying: false,
     carriedPackages: [],
@@ -1072,6 +1001,7 @@ function createFreshRun(status = "countdown") {
     rush: 0,
     warp: null,
     heliDelivery: null,
+    targetFocus: null,
     invulnerable: 0,
     riverHintCooldown: 0,
     flash: 0,
@@ -1079,6 +1009,7 @@ function createFreshRun(status = "countdown") {
     shakeDuration: 0,
     shakePower: 0,
     floatTexts: [],
+    screenTexts: [],
     particles: [],
     player: {
       x: centerOf(startCell.col),
@@ -1120,7 +1051,7 @@ function updateCountdown(now) {
     countdownOverlay.classList.add("is-hidden");
     startGuide.classList.add("is-hidden");
     startButton.disabled = false;
-    startButton.textContent = "ひと休み";
+    startButton.textContent = COPY.buttons.rest;
     updateManualItems();
     return;
   }
@@ -1134,6 +1065,7 @@ function updateCountdown(now) {
 function updateRun(dt) {
   activeRun.timeLeft = Math.max(0, activeRun.timeLeft - dt);
   maybeTriggerSecondHalfCue();
+  maybeTriggerLastSpurtCue();
   const wasFlying = activeRun.flight > 0;
   activeRun.rush = Math.max(0, activeRun.rush - dt);
   activeRun.shield = Math.max(0, activeRun.shield - dt);
@@ -1147,6 +1079,10 @@ function updateRun(dt) {
   activeRun.slip = Math.max(0, activeRun.slip - dt);
   activeRun.invulnerable = Math.max(0, activeRun.invulnerable - dt);
   activeRun.riverHintCooldown = Math.max(0, activeRun.riverHintCooldown - dt);
+  if (activeRun.targetFocus) {
+    activeRun.targetFocus.ttl = Math.max(0, activeRun.targetFocus.ttl - dt);
+    if (activeRun.targetFocus.ttl <= 0) activeRun.targetFocus = null;
+  }
   activeRun.flash = Math.max(0, activeRun.flash - dt);
   activeRun.shake = Math.max(0, activeRun.shake - dt);
   updateScorePulse(dt);
@@ -1245,6 +1181,8 @@ function getSlideMoveCandidates(x, y, moveX, moveY, speed) {
   const tinyX = hasX ? x + moveX * speed * 0.34 : x;
   const tinyY = hasY ? y + moveY * speed * 0.34 : y;
 
+  const gentleDiagonalMove = { x: gentleX, y: gentleY };
+  const tinyDiagonalMove = { x: tinyX, y: tinyY };
   const xMove = { x: partialX, y };
   const yMove = { x, y: partialY };
   const gentleXMove = { x: gentleX, y };
@@ -1253,9 +1191,9 @@ function getSlideMoveCandidates(x, y, moveX, moveY, speed) {
   const tinyYMove = { x, y: tinyY };
 
   if (Math.abs(moveX) >= Math.abs(moveY)) {
-    candidates.push(xMove, yMove, gentleXMove, gentleYMove, tinyXMove, tinyYMove);
+    candidates.push(gentleDiagonalMove, xMove, yMove, gentleXMove, gentleYMove, tinyDiagonalMove, tinyXMove, tinyYMove);
   } else {
-    candidates.push(yMove, xMove, gentleYMove, gentleXMove, tinyYMove, tinyXMove);
+    candidates.push(gentleDiagonalMove, yMove, xMove, gentleYMove, gentleXMove, tinyDiagonalMove, tinyYMove, tinyXMove);
   }
 
   return candidates;
@@ -1272,7 +1210,7 @@ function applyRoadCenterAssist(speed) {
   const hasDown = map.road[cell.row + 1]?.[cell.col];
   const centerX = centerOf(cell.col);
   const centerY = centerOf(cell.row);
-  const nudge = speed * 0.72;
+  const nudge = speed * 1.05;
   const candidates = [];
 
   const centeredX = moveToward(player.x, centerX, nudge);
@@ -1403,11 +1341,24 @@ function maybeTriggerSecondHalfCue() {
 
   activeRun.secondHalfAnnounced = true;
   activeRun.rush = Math.max(activeRun.rush, 0.8);
-  addFloatText(activeRun.player.x, activeRun.player.y - 74, "甲羅急便", "#f0bf39", 1.05, -36);
+  addFloatText(activeRun.player.x, activeRun.player.y - 74, COPY.itemText.secondHalf, "#f0bf39", 1.05, -36);
   createBurst(activeRun.player.x, activeRun.player.y, "#f0bf39", 14);
   triggerShake(1.3, 0.14);
   vibrate([12, 18, 12]);
   playCue("half");
+}
+
+function maybeTriggerLastSpurtCue() {
+  if (activeRun.lastSpurtAnnounced || activeRun.timeLeft > LAST_SPURT_SECONDS) return;
+
+  activeRun.lastSpurtAnnounced = true;
+  activeRun.flash = Math.max(activeRun.flash, 0.18);
+  addFloatText(activeRun.player.x, activeRun.player.y - 78, COPY.itemText.lastSpurt, "#e85d56", 1.15, -34, 17);
+  addScreenText(COPY.itemText.lastSpurt, "lastSpurt", 1.15, 0.28);
+  createBurst(activeRun.player.x, activeRun.player.y, "#f0bf39", 18);
+  triggerShake(1.8, 0.16);
+  vibrate([18, 18, 18]);
+  playCue("lastSpurt");
 }
 
 function getFastTargetSeconds(job) {
@@ -1548,7 +1499,7 @@ function checkScoreMilestones(before, after) {
     {
       key: "best",
       target: milestones.best,
-      label: "自己最高",
+      label: "自己ベスト",
       color: "#12d8df",
       priority: 20,
     },
@@ -1631,30 +1582,53 @@ function checkPackageAndDestination() {
     activeRun.carriedPackages = [];
     activeRun.carrying = false;
     activeRun.flash = 0.18;
-    addFloatText(destination.x, destination.y - 28, `お届け${cargoCount}個 +${gained}`, "#ffffff");
-    createBurst(destination.x, destination.y, "#e85d56", 12);
-    triggerShake(1.6, 0.16);
+    const deliveryLabel = cargoCount > 1
+      ? copyText(COPY.itemText.multiDeliveryComplete, { count: cargoCount, score: gained })
+      : copyText(COPY.itemText.deliveryComplete, { score: gained });
+    addFloatText(destination.x, destination.y - 30, deliveryLabel, "#ffffff", 1.12, -34, 15);
+    addScreenText(deliveryLabel, cargoCount > 1 ? "multi" : "delivery", 0.92, 0.22);
+    createBurst(destination.x, destination.y, "#e85d56", 16 + cargoCount * 4);
+    triggerShake(2.0, 0.18);
     vibrate(28);
     playCue("delivery");
 
     if (fastBonus > 0) {
-      addFloatText(player.x, player.y - 48, `早便 +${fastBonus}`, "#12d8df");
+      addFloatText(player.x, player.y - 48, copyText(COPY.itemText.fastBonus, { score: fastBonus }), "#12d8df");
     }
 
     if (multiBonus > 0) {
-      addFloatText(player.x, player.y - 66, `まとめ便 +${multiBonus}`, "#f0bf39");
+      addFloatText(player.x, player.y - 66, copyText(COPY.itemText.multiBonus, { score: multiBonus }), "#f0bf39");
     }
 
-    if (Math.floor(comboBefore / 3) < Math.floor(activeRun.combo / 3)) {
-      activeRun.rush = RUSH_SECONDS;
-      addFloatText(player.x, player.y - 62, "追い風", "#12d8df");
-      createBurst(player.x, player.y, "#12d8df", 16);
-      triggerShake(2.1, 0.18);
-      vibrate([18, 20, 18]);
-    }
+    announceComboProgress(comboBefore);
 
+    checkDailyMissionProgress(destination);
     currentJob = createTimedJob(activeRun.rng, currentJob.destination);
     activeRun.bonus = createBonus(activeRun.rng, currentJob, activeRun.player);
+    setTargetFocus("pickup", getPreferredPickupChoice()?.cell ?? currentJob.pickup, 1.8);
+  }
+}
+
+function announceComboProgress(comboBefore, origin = activeRun.player) {
+  if (activeRun.combo >= 2) {
+    const comboColor = activeRun.combo >= 3 ? "#f0bf39" : "#12d8df";
+    const comboLabel = copyText(COPY.itemText.comboBanner, { count: activeRun.combo });
+    addFloatText(origin.x, origin.y - 86, comboLabel, comboColor, 1.0, -32, activeRun.combo >= 3 ? 18 : 16);
+    addScreenText(comboLabel, activeRun.combo >= 3 ? "comboSpecial" : "combo", activeRun.combo >= 3 ? 1.15 : 0.95, 0.33);
+    if (activeRun.combo >= 3) {
+      createBurst(origin.x, origin.y, comboColor, 18);
+      triggerShake(2.4, 0.18);
+      vibrate([16, 18, 16]);
+    }
+  }
+
+  if (Math.floor(comboBefore / 3) < Math.floor(activeRun.combo / 3)) {
+    activeRun.rush = Math.max(activeRun.rush, RUSH_SECONDS);
+    addFloatText(origin.x, origin.y - 62, COPY.itemText.tailwindOn, "#12d8df", 0.9, -32, 14);
+    addScreenText(COPY.itemText.tailwindOn, "boost", 0.95, 0.42);
+    createBurst(origin.x, origin.y, "#12d8df", 16);
+    triggerShake(2.1, 0.18);
+    vibrate([18, 20, 18]);
   }
 }
 
@@ -1682,10 +1656,42 @@ function pickupPackage(choice) {
 
   awardScore(25 + optionBonus, "pickup");
   activeRun.flash = 0.15;
-  addFloatText(pickup.x, pickup.y - 24, `甲羅に${getCarriedCount()}個 +${25 + optionBonus}`, "#f0bf39");
-  createBurst(pickup.x, pickup.y, "#f0bf39", 8);
+  addFloatText(pickup.x, pickup.y - 24, `バッグ${getCarriedCount()}個 +${25 + optionBonus}`, "#f0bf39", 0.9, -30, 13);
+  createBurst(pickup.x, pickup.y, "#f0bf39", 10);
+  setTargetFocus("destination", currentJob.destination, 1.7);
   vibrate(12);
   playCue("pickup");
+  checkDailyMissionProgress(pickup);
+}
+
+function checkDailyMissionProgress(point) {
+  if (activeRun.dailyMissionRewarded || !isDailyMissionCompletedBy(activeRun)) return;
+
+  activeRun.dailyMissionRewarded = true;
+  awardScore(dailyMission.reward, "event");
+  const missionLabel = copyText(COPY.itemText.dailyMissionComplete, { score: dailyMission.reward });
+  addFloatText(point.x, point.y - 74, missionLabel, "#f0bf39", 1.2, -34, 14);
+  addScreenText(missionLabel, "combo", 1.05, 0.4);
+  createBurst(point.x, point.y, "#f0bf39", 18);
+  triggerShake(1.8, 0.16);
+  vibrate([16, 18, 16]);
+  playCue("item");
+}
+
+function setTargetFocus(kind, cell, ttl = 1.6) {
+  if (!cell) return;
+  activeRun.targetFocus = {
+    kind,
+    key: cellKey(cell),
+    ttl,
+    initialTtl: ttl,
+  };
+}
+
+function getTargetFocusStrength(kind, cell) {
+  const focus = activeRun.targetFocus;
+  if (!focus || focus.kind !== kind || focus.key !== cellKey(cell)) return 0;
+  return clamp(focus.ttl / (focus.initialTtl ?? 1), 0, 1);
 }
 
 function getCarriedCount() {
@@ -1722,12 +1728,17 @@ function createManualItemStock() {
 }
 
 function getManualItemName(kind) {
-  if (kind === "clock") return "時計";
-  if (kind === "shield") return "甲羅守り";
-  if (kind === "magnet") return "磁石";
-  if (kind === "turbo") return "追い風";
-  if (kind === "flight") return "ひこうき";
-  return "道具";
+  if (kind === "clock") return COPY.ui.clock;
+  if (kind === "shield") return COPY.ui.shellGuard;
+  if (kind === "magnet") return COPY.ui.magnet;
+  if (kind === "turbo") return COPY.ui.tailwind;
+  if (kind === "flight") return COPY.ui.airplane;
+  if (kind === "star") return COPY.ui.star;
+  return COPY.ui.tool;
+}
+
+function getItemGainedText(kind) {
+  return copyText(COPY.itemText.gained, { name: getManualItemName(kind) });
 }
 
 function getManualItemActiveSeconds(kind) {
@@ -1758,24 +1769,24 @@ function useManualItem(kind) {
 
   if (kind === "clock") {
     activeRun.timeLeft = Math.min(BONUS_MAX_TIME, activeRun.timeLeft + MANUAL_CLOCK_SECONDS);
-    addFloatText(x, y - 48, `時計+${MANUAL_CLOCK_SECONDS.toFixed(1)}秒`, "#12d8df");
+    addFloatText(x, y - 48, copyText(COPY.itemText.clockUse, { seconds: MANUAL_CLOCK_SECONDS.toFixed(1) }), "#12d8df");
     createBurst(x, y, "#12d8df", 12);
   } else if (kind === "shield") {
     activeRun.shield = Math.max(activeRun.shield, SHIELD_SECONDS);
-    addFloatText(x, y - 48, "甲羅守り", "#8e6df0");
+    addFloatText(x, y - 48, getManualItemName(kind), "#8e6df0");
     createBurst(x, y, "#8e6df0", 14);
   } else if (kind === "magnet") {
     activeRun.magnet = Math.max(activeRun.magnet, MAGNET_SECONDS);
-    addFloatText(x, y - 48, "磁石オン", "#f0bf39");
+    addFloatText(x, y - 48, COPY.itemText.magnetOn, "#f0bf39");
     createBurst(x, y, "#f0bf39", 12);
   } else if (kind === "turbo") {
     activeRun.rush = Math.max(activeRun.rush, TURBO_ITEM_SECONDS);
-    addFloatText(x, y - 48, "追い風", "#12d8df");
+    addFloatText(x, y - 48, getManualItemName(kind), "#12d8df");
     createBurst(x, y, "#12d8df", 12);
   } else if (kind === "flight") {
     activeRun.flight = Math.max(activeRun.flight, FLIGHT_SECONDS);
     activeRun.stunned = 0;
-    addFloatText(x, y - 48, "ひとっ飛び", "#4f9cff");
+    addFloatText(x, y - 48, COPY.itemText.flightUse, "#4f9cff");
     createBurst(x, y, "#4f9cff", 16);
   }
 
@@ -1914,7 +1925,15 @@ function checkBonusPickup() {
   activeRun.timeLeft = Math.min(BONUS_MAX_TIME, activeRun.timeLeft + BONUS_SECONDS);
   activeRun.flash = Math.max(activeRun.flash, 0.12);
   activeRun.bonus = null;
-  addFloatText(point.x, point.y - 28, `+${BONUS_SCORE} / 時間+${BONUS_SECONDS.toFixed(1)}秒`, "#12d8df");
+  addFloatText(
+    point.x,
+    point.y - 28,
+    copyText(COPY.itemText.clockBonus, { score: BONUS_SCORE, seconds: BONUS_SECONDS.toFixed(1) }),
+    "#12d8df",
+  );
+  if (shouldShowItemPickupDescription("clock")) {
+    addItemPickupScreenText("clock");
+  }
   createBurst(point.x, point.y, "#12d8df", 12);
   triggerShake(1.2, 0.14);
   vibrate([12, 18]);
@@ -1930,34 +1949,74 @@ function checkSupportItemPickup() {
   const point = toCanvasPoint(item.cell);
 
   if (item.kind === "clock") {
-    grantManualItem(item.kind);
     awardScore(SUPPORT_ITEM_SCORE, "bonus");
-    addFloatText(point.x, point.y - 28, "時計 +1", "#12d8df");
+    activeRun.timeLeft = Math.min(BONUS_MAX_TIME, activeRun.timeLeft + MANUAL_CLOCK_SECONDS);
+    addFloatText(
+      point.x,
+      point.y - 28,
+      copyText(COPY.itemText.clockActivated, { seconds: MANUAL_CLOCK_SECONDS.toFixed(1) }),
+      "#12d8df",
+      0.95,
+      -32,
+      13,
+    );
   } else if (item.kind === "shield") {
     grantManualItem(item.kind);
     awardScore(SUPPORT_ITEM_SCORE, "bonus");
-    addFloatText(point.x, point.y - 28, "甲羅守り +1", "#8e6df0");
+    addFloatText(point.x, point.y - 28, getItemGainedText(item.kind), "#8e6df0", 0.9, -30, 13);
   } else if (item.kind === "magnet") {
     grantManualItem(item.kind);
     awardScore(SUPPORT_ITEM_SCORE, "bonus");
-    addFloatText(point.x, point.y - 28, "磁石 +1", "#f0bf39");
+    addFloatText(point.x, point.y - 28, getItemGainedText(item.kind), "#f0bf39", 0.9, -30, 13);
   } else if (item.kind === "turbo") {
     grantManualItem(item.kind);
     awardScore(SUPPORT_ITEM_SCORE, "bonus");
-    addFloatText(point.x, point.y - 28, "追い風 +1", "#12d8df");
+    addFloatText(point.x, point.y - 28, getItemGainedText(item.kind), "#12d8df", 0.9, -30, 13);
   } else if (item.kind === "flight") {
     grantManualItem(item.kind);
     awardScore(SUPPORT_ITEM_SCORE, "bonus");
-    addFloatText(point.x, point.y - 28, "ひこうき +1", "#4f9cff");
+    addFloatText(point.x, point.y - 28, getItemGainedText(item.kind), "#4f9cff", 0.9, -30, 13);
   } else {
     awardScore(120, "bonus");
-    addFloatText(point.x, point.y - 28, "星 +120", "#f0bf39");
+    addFloatText(point.x, point.y - 28, copyText(COPY.itemText.starBonus, { score: 120 }), "#f0bf39");
   }
 
+  const description = getSupportItemDescription(item.kind);
+  if (shouldShowItemPickupDescription(item.kind)) {
+    addFloatText(point.x, point.y - 46, description, "#ffffff", 0.55, -18, 10);
+    addItemPickupScreenText(item.kind, description);
+  }
+
+  checkDailyMissionProgress(point);
   activeRun.flash = Math.max(activeRun.flash, 0.12);
   createBurst(point.x, point.y, getSupportItemColor(item.kind), 12);
   triggerShake(1.1, 0.12);
   vibrate([10, 18]);
+}
+
+function shouldShowItemPickupDescription(kind) {
+  if (!activeRun.itemDescriptionSeen) activeRun.itemDescriptionSeen = {};
+  if (activeRun.itemDescriptionSeen[kind]) return false;
+
+  const description = getSupportItemDescription(kind);
+  if (!description) return false;
+
+  activeRun.itemDescriptionSeen[kind] = true;
+  return true;
+}
+
+function addItemPickupScreenText(kind, description = getSupportItemDescription(kind)) {
+  if (!description) return;
+
+  addScreenText(
+    copyText(COPY.itemText.itemNotice, {
+      name: getManualItemName(kind),
+      description,
+    }),
+    "item",
+    0.72,
+    0.48,
+  );
 }
 
 function updateRoadEvents(dt) {
@@ -2135,7 +2194,7 @@ function triggerDeliveryPost(event) {
   if (!activeRun.carrying || getCarriedCount() <= 0) {
     event.cooldown = 1.6;
     activeRun.eventCooldowns.post = 0.6;
-    addFloatText(point.x, point.y - 28, "バッグをのせてから", "#ffffff", 0.72, -22);
+    addFloatText(point.x, point.y - 28, COPY.itemText.bagNeeded, "#ffffff", 0.72, -22);
     return;
   }
 
@@ -2143,7 +2202,7 @@ function triggerDeliveryPost(event) {
   activeRun.eventCooldowns.post = 0.85;
   deliverSinglePackageByEvent({
     baseScore: DELIVERY_POST_SCORE,
-    label: "ポスト便",
+    label: COPY.itemText.postDelivery,
     color: "#f0bf39",
     point,
     bonusScale: 0.55,
@@ -2157,7 +2216,7 @@ function triggerHeliDelivery(event) {
   if (!activeRun.carrying || getCarriedCount() <= 0) {
     event.cooldown = 1.8;
     activeRun.eventCooldowns.heli = 0.8;
-    addFloatText(point.x, point.y - 32, "荷物があればヘリ便", "#dffcff", 0.78, -24);
+    addFloatText(point.x, point.y - 32, "バッグがあればヘリ便", "#dffcff", 0.78, -24);
     return;
   }
 
@@ -2172,12 +2231,12 @@ function triggerHeliDelivery(event) {
   };
   deliverSinglePackageByEvent({
     baseScore: HELI_DELIVERY_SCORE,
-    label: "ヘリ便",
+    label: COPY.itemText.heliDelivery,
     color: "#5e96df",
     point,
     bonusScale: 0.7,
   });
-  addFloatText(destination.x, destination.y - 34, "家へひとっ飛び", "#dffcff", 0.95, -28);
+  addFloatText(destination.x, destination.y - 34, COPY.itemText.heliHome, "#dffcff", 0.95, -28);
   createBurst(destination.x, destination.y, "#5e96df", 14);
 }
 
@@ -2204,17 +2263,16 @@ function deliverSinglePackageByEvent({ baseScore, label, color, point, bonusScal
     { bucket: "combo", points: comboBonus },
   ]);
   activeRun.flash = Math.max(activeRun.flash, 0.16);
-  addFloatText(point.x, point.y - 30, `${label} +${total}`, color, 0.9, -28);
+  const eventLabel = copyText(label, { score: total });
+  addFloatText(point.x, point.y - 30, eventLabel, color, 0.9, -28);
+  addScreenText(eventLabel, "delivery", 0.9, 0.22);
   createBurst(point.x, point.y, color, 13);
   triggerShake(1.7, 0.15);
   vibrate([12, 18, 12]);
   playCue("delivery");
 
-  if (Math.floor(comboBefore / 3) < Math.floor(activeRun.combo / 3)) {
-    activeRun.rush = Math.max(activeRun.rush, RUSH_SECONDS);
-    addFloatText(activeRun.player.x, activeRun.player.y - 62, "追い風", "#12d8df");
-    createBurst(activeRun.player.x, activeRun.player.y, "#12d8df", 14);
-  }
+  announceComboProgress(comboBefore);
+  checkDailyMissionProgress(point);
 }
 
 function updateWarp(dt) {
@@ -2248,10 +2306,29 @@ function triggerSurpriseStand(event) {
   const point = toCanvasPoint(event.cell);
   event.cooldown = 7.5;
   activeRun.eventCooldowns.stand = 0.8;
-  grantManualItem(kind);
+  if (kind === "clock") {
+    activeRun.timeLeft = Math.min(BONUS_MAX_TIME, activeRun.timeLeft + MANUAL_CLOCK_SECONDS);
+    countItemPickup("clock");
+  } else {
+    grantManualItem(kind);
+    countItemPickup(kind);
+  }
   awardScore(SURPRISE_STAND_SCORE, "event");
-  addFloatText(point.x, point.y - 32, `${getManualItemName(kind)} +1`, getSupportItemColor(kind));
+  addFloatText(
+    point.x,
+    point.y - 32,
+    kind === "clock"
+      ? copyText(COPY.itemText.clockActivated, { seconds: MANUAL_CLOCK_SECONDS.toFixed(1) })
+      : getItemGainedText(kind),
+    getSupportItemColor(kind),
+  );
   addFloatText(point.x, point.y - 50, `屋台 +${SURPRISE_STAND_SCORE}`, "#f0bf39", 0.75, -28);
+  const description = getSupportItemDescription(kind);
+  if (shouldShowItemPickupDescription(kind)) {
+    addFloatText(point.x, point.y - 68, description, "#ffffff", 0.55, -18, 10);
+    addItemPickupScreenText(kind, description);
+  }
+  checkDailyMissionProgress(point);
   createBurst(point.x, point.y, "#f0bf39", 12);
   triggerShake(1.2, 0.14);
   vibrate([10, 16, 10]);
@@ -2462,6 +2539,7 @@ function finishRun() {
     bonuses: activeRun.bonuses,
     supportPickups: activeRun.supportPickups,
     itemPickups: { ...activeRun.itemPickups },
+    dailyMissionCompleted: activeRun.dailyMissionRewarded,
     maxCarry: activeRun.maxCarry,
     nearMisses: activeRun.nearMisses,
     scoreBreakdown: { ...activeRun.scoreBreakdown },
@@ -2474,10 +2552,10 @@ function finishRun() {
   activeRun.timeLeft = 0;
   resetInput();
   startButton.disabled = true;
-  startButton.textContent = "配達へ";
+  startButton.textContent = COPY.buttons.todayDelivery;
   pauseOverlay.classList.add("is-hidden");
   startGuide.classList.add("is-hidden");
-  countdownOverlay.textContent = "お届け完了";
+  countdownOverlay.textContent = COPY.result.finished;
   countdownOverlay.classList.remove("is-hidden");
   countdownOverlay.classList.add("is-finish");
   updateManualItems();
@@ -2495,24 +2573,27 @@ function completeFinishedRun(record, previousSessionBest) {
 
   activeRun.status = "ended";
   startButton.disabled = false;
-  startButton.textContent = "もう一便";
+  startButton.textContent = COPY.buttons.retry;
   countdownOverlay.classList.add("is-hidden");
   countdownOverlay.classList.remove("is-finish");
   updateManualItems();
   saveSessionScore(record);
+  const playerProfile = updatePlayerProfile(record);
   latestResultCreatedAt = record.createdAt;
-  renderResult(record, previousSessionBest);
+  renderResult(record, previousSessionBest, playerProfile);
   renderRankings();
+  void submitOnlineScore(record);
   vibrate([50, 40, 50]);
 }
 
-function renderResult(record, previousSessionBest) {
+function renderResult(record, previousSessionBest, playerProfile = loadPlayerProfile()) {
   const grade = getResultGrade(record);
-  resultGrade.innerHTML = `<span>ランク</span><b>${grade.label}</b>`;
-  resultGrade.setAttribute("aria-label", `ランク ${grade.label}`);
+  const isTopGrade = grade.key === "ss" || grade.key === "s";
+  resultGrade.innerHTML = `<span>${COPY.ui.rank}</span><b>${grade.label}</b>`;
+  resultGrade.setAttribute("aria-label", `${COPY.ui.rank} ${grade.label}`);
   resultGrade.className = `result-grade grade-${grade.key}`;
   resultName.textContent = record.randomName;
-  resultMissionLine.textContent = `今日のかめ便: ${dailyMission.short}`;
+  resultMissionLine.textContent = getResultMissionLine(record);
   resultScoreHero.textContent = formatNumber(record.score);
   resultDeliveries.textContent = record.deliveries;
   resultCombo.textContent = record.combo;
@@ -2520,6 +2601,8 @@ function renderResult(record, previousSessionBest) {
   if (resultMaxCarry) resultMaxCarry.textContent = `${record.maxCarry ?? 0}個`;
   resultCollisions.textContent = record.collisions;
   resultNearMisses.textContent = record.nearMisses ?? 0;
+  if (resultTotalDeliveries) resultTotalDeliveries.textContent = formatNumber(playerProfile.totalDeliveries);
+  if (resultTotalPlays) resultTotalPlays.textContent = formatNumber(playerProfile.totalPlays);
   const rankInfo = getRankInfo(record);
   resultRank.textContent = rankInfo.rankLabel;
   resultGap.textContent = rankInfo.gapLabel;
@@ -2530,6 +2613,11 @@ function renderResult(record, previousSessionBest) {
   resultBestDeltaLabel.textContent = bestStatus.label;
   resultBestDelta.textContent = bestStatus.value;
   resultBestBadge.classList.toggle("is-hidden", !bestStatus.isNewBest);
+  latestSharePayload = bestStatus.isNewBest ? createSharePayload(record, rankInfo) : null;
+  updateResultShareBox(bestStatus.isNewBest);
+  document.body.classList.toggle("is-result-best", bestStatus.isNewBest);
+  document.body.classList.toggle("is-result-top-grade", isTopGrade);
+  updateResultCelebration(bestStatus.isNewBest, isTopGrade);
   renderResultNextMoves(record, rankInfo, previousSessionBest);
   renderResultHighlights(record);
   renderResultMedals(record);
@@ -2539,6 +2627,30 @@ function renderResult(record, previousSessionBest) {
   document.body.classList.add("show-results");
   window.scrollTo(0, 0);
   gameSetScreen.classList.remove("is-hidden");
+  if (bestStatus.isNewBest || isTopGrade) {
+    playCue(bestStatus.isNewBest ? "resultBest" : "resultRank");
+    vibrate(bestStatus.isNewBest ? [32, 44, 36] : [24, 34, 24]);
+  }
+}
+
+function updateResultCelebration(isNewBest, isTopGrade) {
+  const shouldShow = isNewBest || isTopGrade;
+  if (!resultCelebration) return;
+  resultCelebration.classList.toggle("is-hidden", !shouldShow);
+  resultCelebration.innerHTML = shouldShow ? createResultCelebrationMarkup(isNewBest) : "";
+}
+
+function createResultCelebrationMarkup(isNewBest) {
+  const colors = isNewBest
+    ? ["#f0bf39", "#8bdc96", "#f07d4e", "#ffffff"]
+    : ["#8bdc96", "#f0bf39", "#5ec2ca", "#ffffff"];
+  return Array.from({ length: 14 }, (_, index) => {
+    const x = 6 + ((index * 19) % 88);
+    const delay = (index % 5) * 0.08;
+    const rotate = -22 + ((index * 17) % 46);
+    const color = colors[index % colors.length];
+    return `<i style="--x:${x}%;--d:${delay}s;--r:${rotate}deg;--c:${color}"></i>`;
+  }).join("");
 }
 
 function renderResultItemCounts(record) {
@@ -2556,10 +2668,18 @@ function getRecordItemPickups(record) {
   return itemPickups;
 }
 
+function getResultMissionLine(record) {
+  const done = record.dailyMissionCompleted || isDailyMissionCompletedBy(record);
+  const status = done
+    ? COPY.result.missionDone
+    : getDailyMissionRemainingText(record);
+  return copyText(COPY.result.missionLine, { summary: dailyMission.summary, status });
+}
+
 function setResultDetailExpanded(isExpanded) {
   resultDetailPanel.hidden = !isExpanded;
   resultDetailToggle.setAttribute("aria-expanded", String(isExpanded));
-  resultDetailToggle.textContent = isExpanded ? "詳細を閉じる" : "詳細を開く";
+  resultDetailToggle.textContent = isExpanded ? COPY.ui.detailClose : COPY.ui.detailOpen;
   document.body.classList.toggle("is-result-detail-open", isExpanded);
 }
 
@@ -2590,25 +2710,31 @@ function getRankInfo(record) {
     return {
       rank,
       gap: 0,
-      rankLabel: "1位",
-      gapLabel: "今のところ1位",
+      topGap: 0,
+      rankLabel: COPY.rankingText.firstPlace,
+      gapLabel: COPY.rankingText.firstNow,
+      topGapLabel: COPY.rankingText.firstKeep,
     };
   }
 
   const previous = records[rank - 2];
+  const top = records[0];
   const gap = Math.max(1, previous.score - record.score + 1);
+  const topGap = Math.max(1, top.score - record.score + 1);
   return {
     rank,
     gap,
-    rankLabel: `${rank}位`,
-    gapLabel: `あと${formatNumber(gap)}で${rank - 1}位`,
+    topGap,
+    rankLabel: copyText(COPY.rankingText.rank, { rank }),
+    gapLabel: copyText(COPY.rankingText.rankGap, { score: formatNumber(gap), rank: rank - 1 }),
+    topGapLabel: copyText(COPY.rankingText.topGap, { score: formatNumber(topGap) }),
   };
 }
 
 function getBestStatus(score, previousBest) {
   if (previousBest <= 0 && score <= 0) {
     return {
-      label: "自己最高まで",
+      label: COPY.result.bestTarget,
       value: "1配達",
       isNewBest: false,
     };
@@ -2616,7 +2742,7 @@ function getBestStatus(score, previousBest) {
 
   if (score > previousBest) {
     return {
-      label: "更新",
+      label: COPY.result.updated,
       value: `+${formatNumber(score - previousBest)}`,
       isNewBest: true,
     };
@@ -2624,17 +2750,380 @@ function getBestStatus(score, previousBest) {
 
   if (score === previousBest) {
     return {
-      label: "同じスコア",
-      value: "あと1",
+      label: COPY.result.bestTie,
+      value: COPY.result.oneMore,
       isNewBest: false,
     };
   }
 
   return {
-    label: "自己最高まで",
+    label: COPY.result.bestTarget,
     value: `あと${formatNumber(previousBest - score + 1)}`,
     isNewBest: false,
   };
+}
+
+function createSharePayload(record, rankInfo) {
+  const text = [
+    `${COPY.share.title}で${COPY.result.bestUpdated}`,
+    `${COPY.terms.score} ${formatNumber(record.score)}`,
+    `${COPY.ui.todayRanking} ${rankInfo.rankLabel}`,
+    `${record.deliveries}件${COPY.terms.delivery} / ${record.combo}${COPY.terms.combo}`,
+    COPY.share.url,
+  ].join("\n");
+
+  return {
+    title: COPY.share.title,
+    text,
+    url: COPY.share.url,
+    record: {
+      score: record.score,
+      deliveries: record.deliveries,
+      combo: record.combo,
+      randomName: record.randomName,
+      dateKey: record.dateKey,
+    },
+    rankInfo: {
+      rankLabel: rankInfo.rankLabel,
+      gapLabel: rankInfo.gapLabel,
+      topGapLabel: rankInfo.topGapLabel,
+    },
+  };
+}
+
+function updateResultShareBox(shouldShow) {
+  if (!resultShareBox) return;
+
+  resultShareBox.classList.toggle("is-hidden", !shouldShow);
+  if (resultShareButton) resultShareButton.textContent = COPY.share.button;
+  if (resultShareImageButton) resultShareImageButton.textContent = COPY.share.imageButton;
+  if (resultShareStatus) resultShareStatus.textContent = "";
+}
+
+async function shareLatestResult() {
+  if (!latestSharePayload) return;
+
+  try {
+    const shareData = {
+      title: latestSharePayload.title,
+      text: latestSharePayload.text,
+      url: latestSharePayload.url,
+    };
+    if (navigator.share) {
+      await navigator.share(shareData);
+      return;
+    }
+
+    if (!navigator.clipboard?.writeText) throw new Error("Clipboard is unavailable");
+    await navigator.clipboard.writeText(latestSharePayload.text);
+    if (resultShareStatus) resultShareStatus.textContent = COPY.share.copied;
+  } catch {
+    if (resultShareStatus) resultShareStatus.textContent = COPY.share.failed;
+  }
+}
+
+async function saveLatestResultImage() {
+  if (!latestSharePayload) return;
+
+  try {
+    const canvas = createShareImageCanvas(latestSharePayload);
+    const blob = await canvasToPngBlob(canvas);
+    downloadBlob(blob, `kameposu-${latestSharePayload.record.dateKey}.png`);
+    if (resultShareStatus) resultShareStatus.textContent = COPY.share.imageSaved;
+  } catch {
+    if (resultShareStatus) resultShareStatus.textContent = COPY.share.imageFailed;
+  }
+}
+
+function createShareImageCanvas(payload) {
+  const canvas = document.createElement("canvas");
+  const width = 1080;
+  const height = 1920;
+  canvas.width = width;
+  canvas.height = height;
+  const drawingContext = canvas.getContext("2d");
+  const record = payload.record;
+
+  const background = drawingContext.createLinearGradient(0, 0, 0, height);
+  background.addColorStop(0, "#fff8ec");
+  background.addColorStop(0.52, "#f3fff3");
+  background.addColorStop(1, "#eaf8ff");
+  drawingContext.fillStyle = background;
+  drawingContext.fillRect(0, 0, width, height);
+
+  drawShareSun(drawingContext, 880, 166);
+  drawShareMapPreview(drawingContext, 92, 214, 896, 530);
+
+  drawShareText(drawingContext, COPY.share.title, 92, 120, 700, 72, "#142233", 1000);
+  drawShareText(drawingContext, COPY.result.bestUpdated, 94, 182, 520, 34, "#137b83", 900);
+  drawShareTurtle(drawingContext, 846, 122, 2.1);
+
+  drawSharePanel(drawingContext, 92, 812, 896, 330);
+  drawShareText(drawingContext, COPY.terms.score, 146, 902, 250, 36, "#5d6b7d", 900);
+  drawShareText(drawingContext, formatNumber(record.score), 146, 1038, 520, 118, "#142233", 1000);
+  drawShareTag(drawingContext, record.randomName, 622, 882, 288, 64, "#e9fff0", "#137b5c");
+  drawShareText(drawingContext, payload.rankInfo.rankLabel, 654, 1056, 260, 74, "#127a82", 1000, "center");
+
+  drawShareStatCard(drawingContext, COPY.ui.ranking, payload.rankInfo.rankLabel, 92, 1194, 280, 180);
+  drawShareStatCard(drawingContext, COPY.terms.delivery, `${record.deliveries}件`, 400, 1194, 280, 180);
+  drawShareStatCard(drawingContext, COPY.terms.combo, `${record.combo}${COPY.terms.combo}`, 708, 1194, 280, 180);
+
+  drawSharePanel(drawingContext, 92, 1454, 896, 248);
+  drawShareText(drawingContext, COPY.ui.shareLead, 540, 1534, 720, 44, "#142233", 1000, "center");
+  drawShareText(drawingContext, COPY.ui.shareSub, 540, 1602, 720, 34, "#5d6b7d", 900, "center");
+  drawShareText(drawingContext, COPY.share.url.replace("https://", ""), 540, 1666, 720, 34, "#137b83", 1000, "center");
+
+  drawShareText(drawingContext, COPY.ui.shareTagline, 540, 1812, 760, 42, "#142233", 1000, "center");
+  return canvas;
+}
+
+function drawSharePanel(drawingContext, x, y, width, height) {
+  drawingContext.save();
+  drawingContext.shadowColor = "rgb(32 69 75 / 16%)";
+  drawingContext.shadowBlur = 28;
+  drawingContext.shadowOffsetY = 12;
+  drawingContext.fillStyle = "rgb(255 255 255 / 92%)";
+  roundedRect(x, y, width, height, 42, drawingContext);
+  drawingContext.fill();
+  drawingContext.shadowColor = "transparent";
+  drawingContext.strokeStyle = "rgb(19 123 131 / 16%)";
+  drawingContext.lineWidth = 4;
+  drawingContext.stroke();
+  drawingContext.restore();
+}
+
+function drawShareMapPreview(drawingContext, x, y, width, height) {
+  drawingContext.save();
+  drawSharePanel(drawingContext, x, y, width, height);
+  roundedRect(x + 24, y + 24, width - 48, height - 48, 34, drawingContext);
+  drawingContext.clip();
+  drawingContext.fillStyle = "#9bdca4";
+  drawingContext.fillRect(x + 24, y + 24, width - 48, height - 48);
+
+  const houseColors = ["#ffdd70", "#f58b6e", "#9ccfe5", "#bba4e8", "#cce59f"];
+  [
+    [95, 72, 96, 82],
+    [252, 78, 92, 78],
+    [640, 76, 110, 82],
+    [108, 318, 104, 86],
+    [544, 312, 108, 90],
+    [722, 306, 112, 86],
+  ].forEach(([offsetX, offsetY, blockWidth, blockHeight], index) => {
+    drawingContext.fillStyle = houseColors[index % houseColors.length];
+    roundedRect(x + offsetX, y + offsetY, blockWidth, blockHeight, 14, drawingContext);
+    drawingContext.fill();
+    drawingContext.fillStyle = "rgb(20 34 51 / 12%)";
+    roundedRect(x + offsetX + 28, y + offsetY + 24, blockWidth - 56, 24, 6, drawingContext);
+    drawingContext.fill();
+  });
+
+  drawingContext.fillStyle = "#596777";
+  roundedRect(x + 24, y + 220, width - 48, 118, 0, drawingContext);
+  drawingContext.fill();
+  drawingContext.fillStyle = "#647282";
+  roundedRect(x + 384, y + 24, 116, height - 48, 0, drawingContext);
+  drawingContext.fill();
+  drawingContext.strokeStyle = "#f6d66a";
+  drawingContext.lineWidth = 12;
+  drawingContext.setLineDash([38, 38]);
+  drawingContext.beginPath();
+  drawingContext.moveTo(x + 66, y + 278);
+  drawingContext.lineTo(x + width - 66, y + 278);
+  drawingContext.moveTo(x + 442, y + 68);
+  drawingContext.lineTo(x + 442, y + height - 68);
+  drawingContext.stroke();
+  drawingContext.setLineDash([]);
+
+  drawingContext.lineCap = "round";
+  drawingContext.strokeStyle = "#f0bf39";
+  drawingContext.lineWidth = 18;
+  drawingContext.beginPath();
+  drawingContext.moveTo(x + 172, y + 278);
+  drawingContext.lineTo(x + 424, y + 278);
+  drawingContext.stroke();
+  drawingContext.strokeStyle = "#ef5d58";
+  drawingContext.beginPath();
+  drawingContext.moveTo(x + 500, y + 278);
+  drawingContext.lineTo(x + 752, y + 278);
+  drawingContext.stroke();
+  drawingContext.lineCap = "butt";
+
+  drawShareBag(drawingContext, x + 442, y + 278, 2.4);
+  drawShareHome(drawingContext, x + 790, y + 278, 2.4);
+  drawShareTurtle(drawingContext, x + 230, y + 290, 1.9);
+  drawingContext.restore();
+}
+
+function drawShareSun(drawingContext, x, y) {
+  drawingContext.save();
+  drawingContext.fillStyle = "rgb(255 217 106 / 45%)";
+  drawingContext.beginPath();
+  drawingContext.arc(x, y, 96, 0, Math.PI * 2);
+  drawingContext.fill();
+  drawingContext.fillStyle = "#ffd96a";
+  drawingContext.beginPath();
+  drawingContext.arc(x, y, 58, 0, Math.PI * 2);
+  drawingContext.fill();
+  drawingContext.restore();
+}
+
+function drawShareTurtle(drawingContext, x, y, scale = 1) {
+  drawingContext.save();
+  drawingContext.translate(x, y);
+  drawingContext.scale(scale, scale);
+  drawingContext.fillStyle = "#0f6d60";
+  drawingContext.beginPath();
+  drawingContext.ellipse(24, -2, 17, 15, 0, 0, Math.PI * 2);
+  drawingContext.fill();
+  drawingContext.fillStyle = "#ffe7a2";
+  drawingContext.beginPath();
+  drawingContext.arc(31, -6, 2.2, 0, Math.PI * 2);
+  drawingContext.fill();
+  drawingContext.strokeStyle = "#142233";
+  drawingContext.lineWidth = 2.2;
+  drawingContext.lineCap = "round";
+  drawingContext.beginPath();
+  drawingContext.moveTo(32, 4);
+  drawingContext.quadraticCurveTo(26, 9, 20, 5);
+  drawingContext.stroke();
+  drawingContext.fillStyle = "#0f6d60";
+  [-16, 16].forEach((footX) => {
+    drawingContext.beginPath();
+    drawingContext.ellipse(footX, 17, 10, 7, 0, 0, Math.PI * 2);
+    drawingContext.fill();
+  });
+  drawingContext.fillStyle = "#56bd6f";
+  drawingContext.beginPath();
+  drawingContext.ellipse(0, 0, 29, 26, 0, 0, Math.PI * 2);
+  drawingContext.fill();
+  drawingContext.strokeStyle = "#0f6d60";
+  drawingContext.lineWidth = 4;
+  drawingContext.stroke();
+  drawingContext.strokeStyle = "rgb(255 255 255 / 44%)";
+  drawingContext.lineWidth = 3;
+  drawingContext.beginPath();
+  drawingContext.moveTo(-18, -2);
+  drawingContext.quadraticCurveTo(0, -16, 18, -2);
+  drawingContext.moveTo(-12, 12);
+  drawingContext.quadraticCurveTo(0, 1, 12, 12);
+  drawingContext.stroke();
+  drawingContext.restore();
+}
+
+function drawShareBag(drawingContext, x, y, scale = 1) {
+  drawingContext.save();
+  drawingContext.translate(x, y);
+  drawingContext.scale(scale, scale);
+  drawingContext.strokeStyle = "#9a6b12";
+  drawingContext.lineWidth = 3.5;
+  drawingContext.beginPath();
+  drawingContext.arc(0, -10, 9, Math.PI, 0);
+  drawingContext.stroke();
+  drawingContext.fillStyle = "#f0bf39";
+  roundedRect(-18, -10, 36, 28, 7, drawingContext);
+  drawingContext.fill();
+  drawingContext.strokeStyle = "#9a6b12";
+  drawingContext.lineWidth = 2.5;
+  drawingContext.stroke();
+  drawingContext.fillStyle = "rgb(255 255 255 / 35%)";
+  roundedRect(-11, -3, 22, 6, 3, drawingContext);
+  drawingContext.fill();
+  drawingContext.restore();
+}
+
+function drawShareHome(drawingContext, x, y, scale = 1) {
+  drawingContext.save();
+  drawingContext.translate(x, y);
+  drawingContext.scale(scale, scale);
+  drawingContext.fillStyle = "#ef5d58";
+  drawingContext.beginPath();
+  drawingContext.moveTo(0, -24);
+  drawingContext.lineTo(27, -1);
+  drawingContext.lineTo(-27, -1);
+  drawingContext.closePath();
+  drawingContext.fill();
+  drawingContext.fillStyle = "#fff8ec";
+  roundedRect(-22, -1, 44, 32, 7, drawingContext);
+  drawingContext.fill();
+  drawingContext.fillStyle = "#137b83";
+  roundedRect(-5, 13, 10, 18, 4, drawingContext);
+  drawingContext.fill();
+  drawingContext.fillStyle = "#f0bf39";
+  roundedRect(9, 8, 9, 8, 3, drawingContext);
+  drawingContext.fill();
+  drawingContext.restore();
+}
+
+function drawShareStatCard(drawingContext, label, value, x, y, width, height) {
+  drawSharePanel(drawingContext, x, y, width, height);
+  drawShareText(drawingContext, label, x + width / 2, y + 58, width - 52, 30, "#5d6b7d", 900, "center");
+  drawShareText(drawingContext, value, x + width / 2, y + 126, width - 52, 56, "#142233", 1000, "center");
+}
+
+function drawShareTag(drawingContext, text, x, y, width, height, background, color) {
+  drawingContext.save();
+  drawingContext.fillStyle = background;
+  roundedRect(x, y, width, height, height / 2, drawingContext);
+  drawingContext.fill();
+  drawingContext.strokeStyle = "rgb(19 123 131 / 20%)";
+  drawingContext.lineWidth = 3;
+  drawingContext.stroke();
+  drawingContext.restore();
+  drawShareText(drawingContext, text, x + width / 2, y + height / 2 + 13, width - 44, 28, color, 1000, "center");
+}
+
+function drawShareText(drawingContext, text, x, y, maxWidth, size, color, weight = 900, align = "left") {
+  let fontSize = size;
+  drawingContext.save();
+  drawingContext.textAlign = align;
+  drawingContext.textBaseline = "alphabetic";
+  drawingContext.fillStyle = color;
+  drawingContext.font = canvasFont(weight, fontSize);
+  while (fontSize > 20 && drawingContext.measureText(text).width > maxWidth) {
+    fontSize -= 2;
+    drawingContext.font = canvasFont(weight, fontSize);
+  }
+  drawingContext.fillText(text, x, y);
+  drawingContext.restore();
+}
+
+function canvasFont(weight, size) {
+  return `${weight} ${size}px ${ROUNDED_FONT_FAMILY}`;
+}
+
+function canvasToPngBlob(canvas) {
+  if (canvas.toBlob) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("Canvas export failed"));
+      }, "image/png");
+    });
+  }
+
+  return Promise.resolve(dataUrlToBlob(canvas.toDataURL("image/png")));
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [header, data] = dataUrl.split(",");
+  const mime = header.match(/:(.*?);/)?.[1] ?? "image/png";
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mime });
+}
+
+function downloadBlob(blob, filename) {
+  const imageUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = imageUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(imageUrl), 1200);
 }
 
 function renderResultMedals(record) {
@@ -2642,8 +3131,8 @@ function renderResultMedals(record) {
 
   if (record.collisions === 0 && record.deliveries > 0) {
     medals.push({
-      label: "無接触",
-      value: "ぶつからずに完走",
+      label: COPY.medals.noCollision,
+      value: COPY.medals.noCollisionDescription,
       tone: "gold",
     });
   }
@@ -2652,7 +3141,7 @@ function renderResultMedals(record) {
     .map(
       (medal) => `
         <span class="is-${medal.tone}">
-          <b>勲章</b>
+          <b>${COPY.medals.heading}</b>
           <strong>${medal.label}</strong>
           <small>${medal.value}</small>
         </span>
@@ -2680,25 +3169,25 @@ function getResultBreakdownItems(record) {
   const breakdown = { ...createEmptyScoreBreakdown(), ...(record.scoreBreakdown ?? {}) };
   const items = [
     {
-      label: "お届けスコア",
+      label: COPY.scoreBreakdown.delivery,
       value: breakdown.pickup + breakdown.delivery + breakdown.distance,
     },
     {
-      label: "早便とまとめ便",
+      label: COPY.scoreBreakdown.fastMulti,
       value: breakdown.fast + breakdown.combo + breakdown.multi,
     },
     {
-      label: "ボーナススコア",
+      label: COPY.scoreBreakdown.bonus,
       value: breakdown.bonus + breakdown.event + breakdown.near,
     },
     {
-      label: "減点スコア",
+      label: COPY.scoreBreakdown.penalty,
       value: breakdown.penalty,
     },
   ].filter((item) => item.value !== 0);
 
   if (items.length === 0) {
-    return [{ label: "次回", value: 0 }];
+    return [{ label: COPY.scoreBreakdown.next, value: 0 }];
   }
 
   return items.slice(0, 4);
@@ -2722,24 +3211,30 @@ function getResultNextMoves(record, rankInfo, previousSessionBest) {
   const moves = [];
 
   if (record.deliveries === 0) {
-    moves.push({ label: "まずは", value: "バッグを甲羅へ" });
+    moves.push({ label: COPY.nextMoves.firstLabel, value: COPY.nextMoves.firstValue });
     return moves;
   }
 
-  if (record.collisions > 0) moves.push({ label: "甲羅守り", value: "危ない前に使う" });
-  if ((record.maxCarry ?? 0) < 2) moves.push({ label: "まとめ便", value: "2個のせて届ける" });
-  if ((record.supportPickups ?? 0) < 2) moves.push({ label: "道具拾い", value: "見えたら寄る" });
-  if ((record.bonuses ?? 0) === 0) moves.push({ label: "時計", value: "1つ拾って使う" });
-  if (record.combo < 3) moves.push({ label: "連便", value: `あと${Math.max(1, 3 - record.combo)}件` });
-  if ((record.nearMisses ?? 0) === 0 && record.deliveries >= 5) moves.push({ label: "すれすれ", value: "輪の外をかすめる" });
-  if (record.deliveries < 8) moves.push({ label: "お届け", value: `あと${8 - record.deliveries}件` });
-  if (rankInfo.gap > 0 && rankInfo.rank <= 10) moves.push({ label: "番付", value: `あと${formatNumber(rankInfo.gap)}` });
-  if (record.score <= previousSessionBest && previousSessionBest > 0) {
-    moves.push({ label: "自己最高", value: `あと${formatNumber(previousSessionBest - record.score + 1)}` });
+  if (rankInfo.gap > 0) {
+    moves.push({
+      label: copyText(COPY.rankingText.rankTarget, { rank: rankInfo.rank - 1 }),
+      value: `あと${formatNumber(rankInfo.gap)}`,
+    });
   }
+  if (record.score <= previousSessionBest && previousSessionBest > 0) {
+    moves.push({ label: COPY.result.bestTarget, value: `あと${formatNumber(previousSessionBest - record.score + 1)}` });
+  }
+  if (record.deliveries < 12) moves.push({ label: COPY.nextMoves.deliveryCount, value: `あと${12 - record.deliveries}件で12件` });
+  if (record.collisions > 0) moves.push({ label: COPY.ui.shellGuard, value: COPY.nextMoves.shellGuardValue });
+  if ((record.maxCarry ?? 0) < 2) moves.push({ label: COPY.nextMoves.multiDelivery, value: COPY.nextMoves.multiDeliveryValue });
+  if ((record.supportPickups ?? 0) < 2) moves.push({ label: COPY.nextMoves.toolPickup, value: COPY.nextMoves.toolPickupValue });
+  if ((record.bonuses ?? 0) === 0) moves.push({ label: COPY.ui.clock, value: COPY.nextMoves.clockValue });
+  if (record.combo < 3) moves.push({ label: COPY.terms.combo, value: `あと${Math.max(1, 3 - record.combo)}件` });
+  if ((record.nearMisses ?? 0) === 0 && record.deliveries >= 5) moves.push({ label: COPY.nextMoves.nearMiss, value: COPY.nextMoves.nearMissValue });
+  if (record.deliveries < 8) moves.push({ label: COPY.terms.delivery, value: `あと${8 - record.deliveries}件` });
 
-  moves.push({ label: "もう一便", value: "今日の街を走る" });
-  return moves.slice(0, 1);
+  moves.push({ label: COPY.buttons.retry, value: COPY.nextMoves.retryValue });
+  return moves.slice(0, 2);
 }
 
 function renderResultHighlights(record) {
@@ -2758,33 +3253,28 @@ function renderResultHighlights(record) {
 
 function getResultHighlights(record) {
   const delivery = record.deliveries > 0 ? `${record.deliveries}件` : "0件";
-  const combo = record.combo > 0 ? `${record.combo}連便` : "なし";
-  const safety =
-    record.collisions === 0 && record.deliveries > 0
-      ? "無接触"
-      : record.collisions <= 1
-        ? "安定"
-        : `${record.collisions}回接触`;
+  const combo = record.combo > 0 ? `${record.combo}${COPY.terms.combo}` : "0連便";
+  const collisions = `${record.collisions}回`;
 
   return [
-    { label: "お届け", value: delivery },
-    { label: "連便", value: combo },
-    { label: "接触", value: safety },
+    { label: COPY.ui.deliveryCount, value: delivery },
+    { label: COPY.ui.maxCombo, value: combo },
+    { label: COPY.ui.collisionCount, value: collisions },
   ];
 }
 
 function getResultTip(record) {
   const itemPickups = getRecordItemPickups(record);
-  if (record.deliveries === 0) return "黄色い線を追うとバッグに着きます。";
-  if (record.collisions >= 3) return "危ない道の前で甲羅守り。1回だけ守れます。";
-  if ((record.maxCarry ?? 0) < 2) return "近いバッグを2個、甲羅にのせて届けると伸びます。";
-  if ((record.supportPickups ?? 0) < 2) return "道具は見えたら拾う。磁石は特に便利です。";
-  if ((itemPickups.clock ?? 0) === 0) return "時計は残り時間が少ない時に使うと安心です。";
-  if (record.combo < 3) return "3件続けて届けると追い風が入ります。";
-  if (record.collisions >= 2) return "ひこうきは工事や電気を越えたい時に使えます。";
-  if (record.deliveries < 8) return "追い風とワープで、カメ配達員の近道を作ろう。";
-  if ((record.nearMisses ?? 0) === 0) return "危険な輪の外側をかすめると少し加点。";
-  return "道具を使い切ると、甲羅便のスコアがもう一段伸びます。";
+  if (record.deliveries === 0) return COPY.resultTips.firstBag;
+  if (record.collisions >= 3) return COPY.resultTips.shield;
+  if ((record.maxCarry ?? 0) < 2) return COPY.resultTips.multiDelivery;
+  if ((record.supportPickups ?? 0) < 2) return COPY.resultTips.toolPickup;
+  if ((itemPickups.clock ?? 0) === 0) return COPY.resultTips.clock;
+  if (record.combo < 3) return COPY.resultTips.combo;
+  if (record.collisions >= 2) return COPY.resultTips.flight;
+  if (record.deliveries < 8) return COPY.resultTips.shortcut;
+  if ((record.nearMisses ?? 0) === 0) return COPY.resultTips.nearMiss;
+  return COPY.resultTips.toolUse;
 }
 
 function getResultGrade(record) {
@@ -2803,7 +3293,6 @@ function updateHud() {
   timeValue.textContent = activeRun.timeLeft.toFixed(1);
   const timeProgress = clamp(activeRun.timeLeft / GAME_SECONDS, 0, 1);
   timeGaugeFill.style.transform = `scaleX(${timeProgress})`;
-  timePhase.textContent = isLastSpurt ? "ラスト" : "";
   scoreValue.textContent = formatNumber(activeRun.score);
   scoreCard.classList.toggle("is-score-pop", activeRun.scorePulse > 0);
   scoreGoal.textContent = getScoreGoalLabel();
@@ -2831,7 +3320,7 @@ function getScoreGoalLabel() {
   }
 
   const remaining = activeRun.bestTarget - activeRun.score + 1;
-  return remaining <= 0 ? "最高更新" : `あと${formatShortNumber(remaining)}`;
+  return remaining <= 0 ? COPY.result.highestUpdated : `あと${formatShortNumber(remaining)}`;
 }
 
 function updateTargetDistance() {
@@ -2896,6 +3385,7 @@ function drawScene() {
   drawEdgeHint(camera);
   drawBonusEdgeHint(camera);
   drawStatusText();
+  drawScreenTexts();
   drawTouchControl();
 }
 
@@ -3366,14 +3856,24 @@ function drawJob() {
 
 function drawPickupMarker(x, y, choice, index, isPreferred) {
   const badgeText = choice.bonus > 0 ? `+${choice.bonus}` : `${index + 1}`;
+  const focus = getTargetFocusStrength("pickup", choice.cell);
   const pulse = isPreferred && activeRun.status === "running" ? 1.5 + Math.sin(performance.now() / 170) * 1.5 : 0;
+  const focusPulse = focus > 0 ? 8 * focus + Math.sin(performance.now() / 90) * 2 : 0;
 
   ctx.save();
   ctx.translate(x, y);
-  ctx.fillStyle = `rgb(240 191 57 / ${isPreferred ? 0.18 : 0.1})`;
+  ctx.fillStyle = `rgb(240 191 57 / ${isPreferred || focus > 0 ? 0.2 : 0.1})`;
   ctx.beginPath();
-  ctx.arc(0, 0, 21 + pulse, 0, Math.PI * 2);
+  ctx.arc(0, 0, 21 + pulse + focusPulse, 0, Math.PI * 2);
   ctx.fill();
+
+  if (focus > 0) {
+    ctx.strokeStyle = `rgb(255 255 255 / ${0.45 + focus * 0.38})`;
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 30 + focusPulse * 0.6, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 
   ctx.fillStyle = "rgb(20 32 50 / 18%)";
   ctx.beginPath();
@@ -3390,7 +3890,7 @@ function drawPickupMarker(x, y, choice, index, isPreferred) {
   roundedRect(-12, -8, 24, 16, 8);
   ctx.fill();
   ctx.fillStyle = "#ffffff";
-  ctx.font = "1000 9px system-ui, sans-serif";
+  ctx.font = canvasFont(1000, 9);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(badgeText, 0, 0);
@@ -3398,14 +3898,24 @@ function drawPickupMarker(x, y, choice, index, isPreferred) {
 }
 
 function drawDestinationMarker(x, y) {
+  const focus = getTargetFocusStrength("destination", currentJob.destination);
   const pulse = activeRun.carrying && activeRun.status === "running" ? 1.5 + Math.sin(performance.now() / 170) * 1.5 : 0;
+  const focusPulse = focus > 0 ? 8 * focus + Math.sin(performance.now() / 90) * 2 : 0;
 
   ctx.save();
   ctx.translate(x, y);
-  ctx.fillStyle = `rgb(232 93 86 / ${0.15 + (activeRun.carrying ? 0.08 : 0)})`;
+  ctx.fillStyle = `rgb(232 93 86 / ${0.15 + (activeRun.carrying ? 0.08 : 0) + focus * 0.08})`;
   ctx.beginPath();
-  ctx.arc(0, 0, 22 + pulse, 0, Math.PI * 2);
+  ctx.arc(0, 0, 22 + pulse + focusPulse, 0, Math.PI * 2);
   ctx.fill();
+
+  if (focus > 0) {
+    ctx.strokeStyle = `rgb(255 255 255 / ${0.45 + focus * 0.38})`;
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 32 + focusPulse * 0.6, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 
   ctx.fillStyle = "rgb(20 32 50 / 18%)";
   ctx.beginPath();
@@ -3431,7 +3941,7 @@ function drawFastDeliveryHalo(x, y, bonus) {
   ctx.fillStyle = "#12d8df";
   ctx.strokeStyle = "rgb(20 32 50 / 62%)";
   ctx.lineWidth = 4;
-  ctx.font = "1000 13px system-ui, sans-serif";
+  ctx.font = canvasFont(1000, 13);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.strokeText(`+${bonus}`, x, y - radius - 12);
@@ -3528,6 +4038,10 @@ function getSupportItemColor(kind) {
   if (kind === "turbo") return "#38b978";
   if (kind === "flight") return "#5e96df";
   return "#e5c85f";
+}
+
+function getSupportItemDescription(kind) {
+  return COPY.itemDescriptions[kind] ?? "";
 }
 
 function drawSupportItemCanvasIcon(kind, x, y, scale = 1) {
@@ -3912,7 +4426,7 @@ function drawMarker(x, y, fill, textColor, label) {
   ctx.lineWidth = 1.5;
   ctx.stroke();
   ctx.fillStyle = textColor;
-  ctx.font = "900 16px system-ui, sans-serif";
+  ctx.font = canvasFont(900, 16);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(label, x, y + 1);
@@ -4709,7 +5223,7 @@ function drawHazardWarning(hazard) {
 
   if (danger > 0.72) {
     ctx.fillStyle = "rgb(255 255 255 / 92%)";
-    ctx.font = "1000 16px system-ui, sans-serif";
+    ctx.font = canvasFont(1000, 16);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("!", 0, -radius - 19);
@@ -4856,7 +5370,7 @@ function drawPlayer() {
       roundedRect(-24, -25, 17, 15, 8);
       ctx.fill();
       ctx.fillStyle = "#ffffff";
-      ctx.font = "1000 10px system-ui, sans-serif";
+      ctx.font = canvasFont(1000, 10);
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(`${count}`, -15.5, -17.5);
@@ -4976,7 +5490,7 @@ function drawComboFocusRing() {
   const pulse = (Math.sin(performance.now() * 0.012) + 1) * 0.5;
   const radius = isRushing ? 42 + pulse * 8 : 38 + pulse * 5;
   const color = isRushing ? "18 216 223" : "240 191 57";
-  const label = isRushing ? "追い風" : "あと1";
+  const label = isRushing ? COPY.ui.tailwind : COPY.hudText.oneMore;
 
   ctx.save();
   ctx.translate(x, y);
@@ -4991,7 +5505,7 @@ function drawComboFocusRing() {
   ctx.fillStyle = `rgb(${color} / 88%)`;
   ctx.strokeStyle = "rgb(20 32 50 / 58%)";
   ctx.lineWidth = 4;
-  ctx.font = "1000 13px system-ui, sans-serif";
+  ctx.font = canvasFont(1000, 13);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.strokeText(label, 0, -radius - 13);
@@ -5133,6 +5647,13 @@ function updateEffects(dt) {
     }))
     .filter((item) => item.ttl > 0);
 
+  activeRun.screenTexts = (activeRun.screenTexts ?? [])
+    .map((item) => ({
+      ...item,
+      ttl: item.ttl - dt,
+    }))
+    .filter((item) => item.ttl > 0);
+
   activeRun.particles = activeRun.particles
     .map((particle) => ({
       ...particle,
@@ -5143,7 +5664,7 @@ function updateEffects(dt) {
     .filter((particle) => particle.ttl > 0);
 }
 
-function addFloatText(x, y, text, color, ttl = 0.9, vy = -32) {
+function addFloatText(x, y, text, color, ttl = 0.9, vy = -32, size = 12) {
   activeRun.floatTexts.push({
     x,
     y,
@@ -5152,8 +5673,22 @@ function addFloatText(x, y, text, color, ttl = 0.9, vy = -32) {
     ttl,
     initialTtl: ttl,
     vy,
+    size,
   });
   activeRun.floatTexts = activeRun.floatTexts.slice(-MAX_FLOAT_TEXTS);
+}
+
+function addScreenText(text, tone = "delivery", ttl = 0.9, yRatio = 0.26) {
+  activeRun.screenTexts = [
+    ...(activeRun.screenTexts ?? []),
+    {
+      text,
+      tone,
+      ttl,
+      initialTtl: ttl,
+      yRatio,
+    },
+  ].slice(-MAX_SCREEN_TEXTS);
 }
 
 function createBurst(x, y, color, count) {
@@ -5170,6 +5705,128 @@ function createBurst(x, y, color, count) {
       radius: 2 + activeRun.rng() * 2.5,
     });
   }
+}
+
+function drawScreenTexts() {
+  const texts = activeRun.screenTexts ?? [];
+  if (texts.length === 0) return;
+
+  texts.forEach((item) => {
+    const initialTtl = item.initialTtl ?? 0.9;
+    const age = initialTtl - item.ttl;
+    const alpha = Math.min(clamp(age / 0.12, 0, 1), clamp(item.ttl / 0.24, 0, 1));
+    if (alpha <= 0) return;
+
+    const tone = getScreenTextTone(item.tone);
+    const maxWidth = Math.max(180, viewport.width - 34);
+    const fontSize = getScreenTextFontSize(item.text, maxWidth);
+    const paddingX = 15;
+    const paddingY = 8;
+    const textWidth = Math.min(ctx.measureText(item.text).width, maxWidth);
+    const width = Math.min(maxWidth, textWidth + paddingX * 2);
+    const height = fontSize + paddingY * 2;
+    const x = viewport.width / 2 - width / 2;
+    const y = viewport.height * item.yRatio - height / 2 - age * 10;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = tone.shadow;
+    roundedRect(x + 2, y + 5, width, height, 12);
+    ctx.fill();
+    ctx.fillStyle = tone.background;
+    roundedRect(x, y, width, height, 12);
+    ctx.fill();
+    ctx.strokeStyle = tone.border;
+    ctx.lineWidth = 2;
+    roundedRect(x + 1, y + 1, width - 2, height - 2, 11);
+    ctx.stroke();
+
+    if (item.tone === "comboSpecial") {
+      ctx.fillStyle = "rgba(255, 255, 255, 0.84)";
+      ctx.beginPath();
+      ctx.arc(x + 18, y + height / 2, 3.5, 0, Math.PI * 2);
+      ctx.arc(x + width - 18, y + height / 2, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.font = canvasFont(1000, fontSize);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = tone.stroke;
+    ctx.strokeText(item.text, viewport.width / 2, y + height / 2);
+    ctx.fillStyle = tone.text;
+    ctx.fillText(item.text, viewport.width / 2, y + height / 2);
+    ctx.restore();
+  });
+}
+
+function getScreenTextTone(tone) {
+  if (tone === "comboSpecial") {
+    return {
+      background: "rgba(240, 125, 78, 0.94)",
+      border: "rgba(255, 248, 223, 0.9)",
+      text: "#ffffff",
+      stroke: "rgba(90, 59, 0, 0.42)",
+      shadow: "rgba(240, 125, 78, 0.22)",
+    };
+  }
+
+  if (tone === "combo" || tone === "multi") {
+    return {
+      background: "rgba(240, 191, 57, 0.94)",
+      border: "rgba(255, 255, 255, 0.86)",
+      text: "#172330",
+      stroke: "rgba(255, 255, 255, 0.64)",
+      shadow: "rgba(240, 191, 57, 0.24)",
+    };
+  }
+
+  if (tone === "boost") {
+    return {
+      background: "rgba(232, 251, 248, 0.95)",
+      border: "rgba(21, 127, 135, 0.28)",
+      text: "#0f6268",
+      stroke: "rgba(255, 255, 255, 0.78)",
+      shadow: "rgba(21, 127, 135, 0.18)",
+    };
+  }
+
+  if (tone === "item") {
+    return {
+      background: "rgba(255, 248, 223, 0.95)",
+      border: "rgba(240, 191, 57, 0.5)",
+      text: "#5a3b00",
+      stroke: "rgba(255, 255, 255, 0.72)",
+      shadow: "rgba(240, 191, 57, 0.2)",
+    };
+  }
+
+  if (tone === "lastSpurt") {
+    return {
+      background: "rgba(232, 93, 86, 0.94)",
+      border: "rgba(255, 248, 223, 0.88)",
+      text: "#ffffff",
+      stroke: "rgba(90, 36, 20, 0.45)",
+      shadow: "rgba(232, 93, 86, 0.24)",
+    };
+  }
+
+  return {
+    background: "rgba(21, 127, 135, 0.9)",
+    border: "rgba(255, 255, 255, 0.82)",
+    text: "#ffffff",
+    stroke: "rgba(20, 32, 50, 0.42)",
+    shadow: "rgba(21, 127, 135, 0.22)",
+  };
+}
+
+function getScreenTextFontSize(text, maxWidth) {
+  for (let size = 22; size >= 15; size -= 1) {
+    ctx.font = canvasFont(1000, size);
+    if (ctx.measureText(text).width <= maxWidth - 30) return size;
+  }
+  return 15;
 }
 
 function drawEffects() {
@@ -5189,7 +5846,7 @@ function drawEffects() {
     const alpha = clamp(item.ttl / (item.initialTtl ?? 0.9), 0, 1);
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.font = "1000 12px system-ui, sans-serif";
+    ctx.font = canvasFont(1000, item.size ?? 12);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.lineWidth = 4;
@@ -5343,7 +6000,7 @@ function drawEdgeHint(camera) {
   const isDestinationTarget = activeRun.carrying && cellKey(cell) === cellKey(currentJob.destination);
   const fill = isDestinationTarget ? "#e85d56" : "#f0b42c";
   const blocks = Math.max(1, Math.ceil(distanceToCell(activeRun.player, cell) / TILE));
-  drawEdgeBadge(x, y, isDestinationTarget ? "destination" : "package", fill, `${isDestinationTarget ? "家" : "荷物"} ${blocks}マス`);
+  drawEdgeBadge(x, y, isDestinationTarget ? "destination" : "package", fill, `${isDestinationTarget ? COPY.terms.home : COPY.terms.bag} ${blocks}マス`);
 }
 
 function drawBonusEdgeHint(camera) {
@@ -5384,7 +6041,7 @@ function drawEdgeBadge(x, y, icon, fill, badgeText) {
   ctx.fill();
   drawEdgeBadgeIcon(icon);
 
-  ctx.font = "1000 12px system-ui, sans-serif";
+  ctx.font = canvasFont(1000, 12);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const badgeWidth = Math.max(58, Math.min(94, ctx.measureText(badgeText).width + 18));
@@ -6196,7 +6853,7 @@ function getCurrentTarget() {
 }
 
 function getPickupChoices(job) {
-  return job.pickupOptions?.length ? job.pickupOptions : [{ cell: job.pickup, label: "荷物", bonus: 0 }];
+  return job.pickupOptions?.length ? job.pickupOptions : [{ cell: job.pickup, label: COPY.terms.bag, bonus: 0 }];
 }
 
 function getAvailablePickupChoices(job) {
@@ -6308,7 +6965,7 @@ function choosePickupChoices(rng, avoidCell, destination, count) {
     .sort((a, b) => a.distance - b.distance)
     .map((choice, index) => ({
       ...choice,
-      label: `荷物${index + 1}`,
+      label: `バッグ${index + 1}`,
     }));
 }
 
@@ -6497,7 +7154,7 @@ function distanceToSegment(pointX, pointY, startX, startY, endX, endY) {
 }
 
 function renderRankings() {
-  const records = getTodayScores(todayKey).slice(0, 10);
+  const records = getTodayScores(todayKey);
   const todayMarkup = renderTodayRankingMarkup(records);
 
   if (todayRanking) todayRanking.innerHTML = todayMarkup;
@@ -6512,24 +7169,167 @@ function renderRankings() {
   if (homeWeekRanking) homeWeekRanking.innerHTML = weekMarkup;
 }
 
+async function loadOnlineRankings(dateKey = todayKey) {
+  if (!rankingApiUrl) return;
+
+  try {
+    const url = new URL(rankingApiUrl);
+    url.searchParams.set("date", dateKey);
+    const response = await fetchWithTimeout(
+      url.toString(),
+      {
+        headers: {
+          Accept: "application/json",
+        },
+      },
+      RANKING_API_TIMEOUT_MS,
+    );
+    if (!response.ok) return;
+
+    applyOnlineRankingResponse(await response.json());
+    renderRankings();
+    refreshResultRankSummary();
+  } catch {
+    // オンラインランキングに届かない時も、ローカル順位で遊べるようにする。
+  }
+}
+
+async function submitOnlineScore(record) {
+  if (!rankingApiUrl || !record || record.score <= 0) return;
+
+  try {
+    const response = await fetchWithTimeout(
+      rankingApiUrl,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(createOnlineScorePayload(record)),
+      },
+      RANKING_API_TIMEOUT_MS,
+    );
+    if (!response.ok) return;
+
+    const payload = await response.json();
+    applyOnlineRankingResponse(payload.ranking ?? payload);
+    renderRankings();
+    refreshResultRankSummary(record);
+  } catch {
+    // スコア送信に失敗しても、個人情報なしのローカル記録は残す。
+  }
+}
+
+function createOnlineScorePayload(record) {
+  return {
+    dateKey: record.dateKey,
+    randomName: record.randomName,
+    score: record.score,
+    mapSeed: record.mapSeed,
+    deliveries: record.deliveries,
+    combo: record.combo,
+    collisions: record.collisions,
+    nearMisses: record.nearMisses ?? 0,
+    itemPickups: getRecordItemPickups(record),
+    scoreBreakdown: { ...createEmptyScoreBreakdown(), ...(record.scoreBreakdown ?? {}) },
+  };
+}
+
+function applyOnlineRankingResponse(payload) {
+  if (!payload || typeof payload !== "object") return;
+  const dateKey = typeof payload.dateKey === "string" ? payload.dateKey : todayKey;
+  const today = Array.isArray(payload.today)
+    ? payload.today.map(normalizeOnlineRankingRecord).filter(Boolean)
+    : null;
+  const week = Array.isArray(payload.week)
+    ? payload.week.map(normalizeOnlineWeekEntry).filter(Boolean)
+    : null;
+
+  onlineRanking = {
+    dateKey,
+    today,
+    week,
+  };
+}
+
+function normalizeOnlineRankingRecord(record) {
+  return sanitizeSessionScoreRecord({
+    dateKey: record?.dateKey,
+    randomName: record?.randomName,
+    score: record?.score,
+    deliveries: record?.deliveries,
+    combo: record?.combo,
+    collisions: record?.collisions,
+    itemPickups: record?.itemPickups,
+    nearMisses: record?.nearMisses,
+    scoreBreakdown: record?.scoreBreakdown,
+    mapSeed: record?.mapSeed,
+    createdAt: record?.createdAt,
+  });
+}
+
+function normalizeOnlineWeekEntry(entry) {
+  if (!entry || typeof entry !== "object" || typeof entry.dateKey !== "string") return null;
+  return {
+    dateKey: entry.dateKey,
+    top: entry.top ? normalizeOnlineRankingRecord(entry.top) : null,
+  };
+}
+
+function refreshResultRankSummary(record = getLatestResultRecord()) {
+  if (!record || !document.body.classList.contains("show-results")) return;
+  const rankInfo = getRankInfo(record);
+  resultRank.textContent = rankInfo.rankLabel;
+  resultGap.textContent = rankInfo.gapLabel;
+  renderResultNextMoves(record, rankInfo, getSessionBestScore(record.dateKey));
+}
+
+function getLatestResultRecord() {
+  if (!latestResultCreatedAt) return null;
+  return loadSessionScores().find((record) => record.createdAt === latestResultCreatedAt) ?? null;
+}
+
 function renderTodayRankingMarkup(records) {
-  return records
-    .map((record, index) => {
-      const isCurrent = record.createdAt === latestResultCreatedAt;
-      const podiumClass = index < 3 ? `is-podium is-podium-${index + 1}` : "";
-      const crown = index < 3 ? `<b class="rank-crown" aria-hidden="true">♛</b>` : "";
-      return `
-        <li class="ranking-row ${podiumClass} ${isCurrent ? "is-current" : ""}">
-          <span class="rank-index">${crown}<em>${index + 1}</em></span>
-          <span>
-            <span class="rank-name">${escapeHtml(record.randomName)}</span>
-            <span class="rank-meta">${isCurrent ? "今回 / " : ""}${record.deliveries}便 / ${record.combo}連便</span>
-          </span>
-          <span class="rank-score">${formatNumber(record.score)}</span>
-        </li>
-      `;
-    })
-    .join("");
+  if (records.length === 0) {
+    return `<li class="ranking-empty">${COPY.rankingText.empty}</li>`;
+  }
+
+  const topRows = records.slice(0, 10).map((record, index) => renderTodayRankingRow(record, index));
+  const currentIndex = records.findIndex((record) => record.createdAt === latestResultCreatedAt);
+
+  if (currentIndex >= 10) {
+    topRows.push('<li class="ranking-gap" aria-hidden="true">...</li>');
+    topRows.push(renderTodayRankingRow(records[currentIndex], currentIndex));
+  }
+
+  return topRows.join("");
+}
+
+function renderTodayRankingRow(record, index) {
+  const isCurrent = record.createdAt === latestResultCreatedAt;
+  const podiumClass = index < 3 ? `is-podium is-podium-${index + 1}` : "";
+  const crown = index < 3 ? `<b class="rank-crown" aria-hidden="true">♛</b>` : "";
+  const topGap = isCurrent && index > 0 ? getTopGapLabel(record, todayKey) : "";
+  const meta = copyText(COPY.rankingText.meta, { deliveries: record.deliveries, combo: record.combo });
+  return `
+    <li class="ranking-row ${podiumClass} ${isCurrent ? "is-current" : ""}">
+      <span class="rank-index">${crown}<em>${index + 1}</em></span>
+      <span>
+        <span class="rank-name">${escapeHtml(record.randomName)}</span>
+        <span class="rank-meta">${isCurrent ? COPY.rankingText.currentPrefix : ""}${meta}</span>
+        ${topGap ? `<span class="rank-gap-text">${topGap}</span>` : ""}
+      </span>
+      <span class="rank-score">${formatNumber(record.score)}</span>
+    </li>
+  `;
+}
+
+function getTopGapLabel(record, dateKey) {
+  const top = getTodayScores(dateKey)[0];
+  if (!top || top.createdAt === record.createdAt) return "";
+  const gap = Math.max(1, top.score - record.score + 1);
+  return copyText(COPY.rankingText.topGap, { score: formatNumber(gap) });
 }
 
 function renderWeekRankingRow(dateKey, todayDate) {
@@ -6543,7 +7343,7 @@ function renderWeekRankingRow(dateKey, todayDate) {
         <span class="week-day">${getWeekdayLabel(dateKey)}</span>
         <span>
           <span class="week-name">-</span>
-          <span class="week-meta">まだ記録なし</span>
+          <span class="week-meta">${COPY.rankingText.empty}</span>
         </span>
         <span class="week-score">-</span>
       </div>
@@ -6555,7 +7355,7 @@ function renderWeekRankingRow(dateKey, todayDate) {
       <span class="week-day">${getWeekdayLabel(dateKey)}</span>
       <span>
         <span class="week-name">${escapeHtml(top.randomName)}</span>
-        <span class="week-meta">${top.deliveries}便 / ${top.combo}連便</span>
+        <span class="week-meta">${copyText(COPY.rankingText.meta, { deliveries: top.deliveries, combo: top.combo })}</span>
       </span>
       <span class="week-score">${formatNumber(top.score)}</span>
     </div>
@@ -6563,9 +7363,21 @@ function renderWeekRankingRow(dateKey, todayDate) {
 }
 
 function getTodayScores(dateKey) {
-  const base = dateKey === todayKey ? baseNpcScores : buildNpcScoresForDate(dateKey, 10);
+  const onlineRecords = getOnlineScoresForDate(dateKey);
+  if (onlineRecords) {
+    const currentRecord = loadSessionScores().find((record) => record.dateKey === dateKey && record.createdAt === latestResultCreatedAt);
+    return mergeScoreRecords(onlineRecords, currentRecord ? [currentRecord] : []).sort((a, b) => b.score - a.score);
+  }
+
   const session = loadSessionScores().filter((record) => record.dateKey === dateKey);
-  return [...base, ...session].sort((a, b) => b.score - a.score);
+  return session.sort((a, b) => b.score - a.score);
+}
+
+function getOnlineScoresForDate(dateKey) {
+  if (onlineRanking.dateKey === dateKey && onlineRanking.today) return onlineRanking.today;
+  const weekEntry = onlineRanking.week?.find((entry) => entry.dateKey === dateKey);
+  if (weekEntry) return weekEntry.top ? [weekEntry.top] : [];
+  return null;
 }
 
 function getSessionBestScore(dateKey) {
@@ -6574,44 +7386,91 @@ function getSessionBestScore(dateKey) {
     .reduce((best, record) => Math.max(best, record.score), 0);
 }
 
-function buildNpcScoresForDate(dateKey, count) {
-  const rng = mulberry32(hashString(`${dateKey}:npc-scores`));
-
-  return Array.from({ length: count }, (_, index) => {
-    const deliveries = 7 + Math.floor(rng() * 12);
-    const combo = 2 + Math.floor(rng() * Math.min(8, deliveries));
-    const collisions = Math.floor(rng() * 4);
-    const score = 900 + deliveries * 430 + combo * 180 - collisions * 90 + Math.floor(rng() * 700);
-
-    return {
-      dateKey,
-      randomName: generateRandomPlayerName(rng),
-      score: Math.max(0, score - index * 55),
-      deliveries,
-      combo,
-      collisions,
-      mapSeed: hashString(dateKey),
-      createdAt: `${dateKey}T12:00:00.000Z`,
-    };
-  });
-}
-
 function saveSessionScore(record) {
   try {
     const next = [record, ...loadSessionScores()].slice(0, 80);
+    localStorage.setItem(SCORE_KEY, JSON.stringify(next));
     sessionStorage.setItem(SCORE_KEY, JSON.stringify(next));
   } catch {
-    // 記録保存が使えないブラウザ設定でも、遊び自体は止めない。
+    try {
+      const next = [record, ...loadSessionScores()].slice(0, 80);
+      sessionStorage.setItem(SCORE_KEY, JSON.stringify(next));
+    } catch {
+      // 記録保存が使えないブラウザ設定でも、遊び自体は止めない。
+    }
   }
 }
 
 function loadSessionScores() {
   try {
-    const parsed = JSON.parse(sessionStorage.getItem(SCORE_KEY) ?? "[]");
-    return Array.isArray(parsed) ? parsed.map(sanitizeSessionScoreRecord).filter(Boolean) : [];
+    const localRecords = parseStoredScores(localStorage.getItem(SCORE_KEY));
+    const sessionRecords = parseStoredScores(sessionStorage.getItem(SCORE_KEY));
+    return mergeScoreRecords(localRecords, sessionRecords).slice(0, 80);
   } catch {
-    return [];
+    try {
+      return parseStoredScores(sessionStorage.getItem(SCORE_KEY)).slice(0, 80);
+    } catch {
+      return [];
+    }
   }
+}
+
+function parseStoredScores(value) {
+  const parsed = JSON.parse(value ?? "[]");
+  return Array.isArray(parsed) ? parsed.map(sanitizeSessionScoreRecord).filter(Boolean) : [];
+}
+
+function mergeScoreRecords(...recordGroups) {
+  const seen = new Set();
+  return recordGroups
+    .flat()
+    .filter((record) => {
+      const key = `${record.dateKey}:${record.createdAt}:${record.randomName}:${record.score}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+}
+
+function updatePlayerProfile(record) {
+  const current = loadPlayerProfile();
+  const next = {
+    lastPlayerName: record.randomName,
+    bestScore: Math.max(current.bestScore, record.score),
+    totalDeliveries: current.totalDeliveries + record.deliveries,
+    totalPlays: current.totalPlays + 1,
+  };
+
+  try {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(next));
+  } catch {
+    // LocalStorage が使えない環境では、今回の表示だけに使う。
+  }
+
+  return next;
+}
+
+function loadPlayerProfile() {
+  try {
+    return sanitizePlayerProfile(JSON.parse(localStorage.getItem(PROFILE_KEY) ?? "{}"));
+  } catch {
+    return sanitizePlayerProfile({});
+  }
+}
+
+function sanitizePlayerProfile(profile) {
+  const lastPlayerName =
+    typeof profile.lastPlayerName === "string" && /^[ぁ-んァ-ン一-龥々ー]{2,16}$/.test(profile.lastPlayerName)
+      ? profile.lastPlayerName
+      : "";
+
+  return {
+    lastPlayerName,
+    bestScore: sanitizeInteger(profile.bestScore, 0, 9999999),
+    totalDeliveries: sanitizeInteger(profile.totalDeliveries, 0, 999999),
+    totalPlays: sanitizeInteger(profile.totalPlays, 0, 99999),
+  };
 }
 
 function sanitizeSessionScoreRecord(record) {
@@ -6635,10 +7494,11 @@ function sanitizeSessionScoreRecord(record) {
     bonuses,
     supportPickups: sanitizeInteger(record.supportPickups, 0, 120),
     itemPickups: sanitizeItemPickups(record.itemPickups, bonuses),
+    dailyMissionCompleted: record.dailyMissionCompleted === true,
     maxCarry: sanitizeInteger(record.maxCarry, 0, MAX_CARRY_PACKAGES),
     nearMisses: sanitizeInteger(record.nearMisses, 0, 200),
     scoreBreakdown: sanitizeScoreBreakdown(record.scoreBreakdown),
-    mapSeed: typeof record.mapSeed === "string" ? record.mapSeed.slice(0, 64) : "",
+    mapSeed: sanitizeInteger(record.mapSeed, 0, 4294967295),
     createdAt,
   };
 }
@@ -6895,34 +7755,139 @@ function getDailyMission(dateKey) {
   ];
   const adjective = cityAdjectives[Math.floor(rng() * cityAdjectives.length)];
   const noun = cityNouns[Math.floor(rng() * cityNouns.length)];
-  const requesters = [
-    "青空商店街",
-    "駅前のパン屋",
-    "港の食堂",
-    "時計坂の雑貨店",
-    "花咲き横丁",
-    "屋台通り",
-    "中央通りの店番",
-    "水路沿いのカフェ",
-  ];
-  const parcels = [
-    "急ぎの荷物",
-    "忘れもの",
-    "できたて弁当",
-    "祭りの小包",
-    "道具箱",
-    "おみやげ袋",
-    "修理パーツ",
-    "招待状",
-  ];
-  const requester = requesters[Math.floor(rng() * requesters.length)];
-  const parcel = parcels[Math.floor(rng() * parcels.length)];
+  const mission = getDailyMissionDefinition(dateKey);
 
   return {
     cityLabel: `今日の街 ${adjective}${noun}`,
-    short: `${requester}へ、${parcel}`,
-    summary: `${requester}へ、${parcel}を甲羅便で届ける`,
+    ...mission,
+    short: mission.summary,
   };
+}
+
+function getDailyMissionDefinition(dateKey) {
+  const missions = [
+    {
+      key: "deliver-3",
+      summary: "バッグを3個、家へ配達しよう",
+      conditionText: "3個配達",
+      metric: "deliveries",
+      target: 3,
+      unit: "個",
+      reward: 430,
+    },
+    {
+      key: "deliver-4",
+      summary: "バッグを4個、家へ配達しよう",
+      conditionText: "4個配達",
+      metric: "deliveries",
+      target: 4,
+      unit: "個",
+      reward: 480,
+    },
+    {
+      key: "combo-3",
+      summary: "3連便を決めよう",
+      conditionText: "3連便",
+      metric: "combo",
+      target: 3,
+      unit: "連便",
+      reward: 470,
+    },
+    {
+      key: "carry-2",
+      summary: "バッグを2個、甲羅にのせよう",
+      conditionText: "2個同時持ち",
+      metric: "maxCarry",
+      target: 2,
+      unit: "個",
+      reward: 430,
+    },
+    {
+      key: "items-2",
+      summary: "アイテムを2個集めよう",
+      conditionText: "アイテム2個",
+      metric: "supportPickups",
+      target: 2,
+      unit: "個",
+      reward: 420,
+    },
+    {
+      key: "clock-1",
+      summary: "時計を1個入手しよう",
+      conditionText: "時計1個",
+      metric: "item",
+      itemKind: "clock",
+      target: 1,
+      unit: "個",
+      reward: 390,
+    },
+    {
+      key: "shield-1",
+      summary: "甲羅守りを1個入手しよう",
+      conditionText: "甲羅守り1個",
+      metric: "item",
+      itemKind: "shield",
+      target: 1,
+      unit: "個",
+      reward: 390,
+    },
+    {
+      key: "magnet-1",
+      summary: "磁石を1個入手しよう",
+      conditionText: "磁石1個",
+      metric: "item",
+      itemKind: "magnet",
+      target: 1,
+      unit: "個",
+      reward: 390,
+    },
+    {
+      key: "turbo-1",
+      summary: "追い風を1個入手しよう",
+      conditionText: "追い風1個",
+      metric: "item",
+      itemKind: "turbo",
+      target: 1,
+      unit: "個",
+      reward: 390,
+    },
+    {
+      key: "flight-1",
+      summary: "ひこうきを1個入手しよう",
+      conditionText: "ひこうき1個",
+      metric: "item",
+      itemKind: "flight",
+      target: 1,
+      unit: "個",
+      reward: 390,
+    },
+  ];
+  const dayIndex = Math.floor(parseJstDateKey(dateKey).getTime() / 86400000);
+  return missions[((dayIndex % missions.length) + missions.length) % missions.length];
+}
+
+function isDailyMissionCompletedBy(source) {
+  return getDailyMissionValue(source) >= dailyMission.target;
+}
+
+function getDailyMissionRemainingText(source) {
+  const missing = Math.max(1, dailyMission.target - getDailyMissionValue(source));
+  return `あと${missing}${dailyMission.unit}`;
+}
+
+function getDailyMissionValue(source) {
+  if (!source) return 0;
+
+  if (dailyMission.metric === "deliveries") return source.deliveries ?? 0;
+  if (dailyMission.metric === "combo") return source.combo ?? source.maxCombo ?? 0;
+  if (dailyMission.metric === "maxCarry") return source.maxCarry ?? 0;
+  if (dailyMission.metric === "supportPickups") return source.supportPickups ?? 0;
+  if (dailyMission.metric === "item") {
+    const itemPickups = getRecordItemPickups(source);
+    return itemPickups[dailyMission.itemKind] ?? 0;
+  }
+
+  return 0;
 }
 
 function formatNumber(value) {
@@ -6983,11 +7948,27 @@ function playCue(kind) {
       [520, 0, 0.06],
       [690, 0.065, 0.08],
     ],
+    lastSpurt: [
+      [880, 0, 0.045],
+      [660, 0.05, 0.055],
+      [980, 0.12, 0.075],
+    ],
     hit: [[190, 0, 0.09]],
     finish: [
       [580, 0, 0.08],
       [760, 0.075, 0.09],
       [980, 0.16, 0.11],
+    ],
+    resultRank: [
+      [620, 0, 0.055],
+      [820, 0.06, 0.065],
+      [1040, 0.13, 0.08],
+    ],
+    resultBest: [
+      [660, 0, 0.055],
+      [880, 0.06, 0.065],
+      [1120, 0.13, 0.08],
+      [1360, 0.22, 0.1],
     ],
   };
 

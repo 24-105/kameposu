@@ -52,6 +52,8 @@ create index if not exists scores_created_at_idx
 
 alter table public.scores enable row level security;
 
+grant select, insert on table public.scores to service_role;
+
 revoke all on table public.scores from anon, authenticated;
 
 do $$
@@ -63,6 +65,7 @@ begin
       and relnamespace = 'public'::regnamespace
       and relname = 'scores_id_seq'
   ) then
+    grant usage, select on sequence public.scores_id_seq to service_role;
     revoke all on sequence public.scores_id_seq from anon, authenticated;
   end if;
 end

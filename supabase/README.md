@@ -18,6 +18,13 @@
 ## あなたがやること
 
 1. Supabaseで新しいプロジェクトを作る
+
+Securityは次の設定にする:
+
+- Enable Data API: ON
+- Automatically expose new tables: OFF
+- Enable automatic RLS: ON
+
 2. Supabase SQL Editorで `schema.sql` を実行する
 3. Supabase CLIでプロジェクトに接続する
 
@@ -30,8 +37,8 @@ supabase link --project-ref <project-ref>
 
 ```sh
 supabase secrets set \
-  SUPABASE_URL=https://<project-ref>.supabase.co \
-  SUPABASE_SERVICE_ROLE_KEY=<service-role-key> \
+  KAMEPOSU_DATABASE_URL=https://<project-ref>.supabase.co \
+  KAMEPOSU_SERVICE_ROLE_KEY=<service-role-key> \
   APP_ORIGINS=https://24-105.github.io
 ```
 
@@ -47,9 +54,15 @@ supabase functions deploy ranking
 https://<project-ref>.supabase.co/functions/v1/ranking
 ```
 
-このURLをフロント側につなぎます。
+7. `index.html` の `kameposu-ranking-api` にFunction URLを入れる
+
+```html
+<meta name="kameposu-ranking-api" content="https://<project-ref>.supabase.co/functions/v1/ranking" />
+```
+
+この値が空のままなら、ゲームはブラウザ内のローカル記録だけでランキング表示します。
 
 ## 注意
 
-`SUPABASE_SERVICE_ROLE_KEY` は絶対にGitHub Pagesやフロントエンドへ入れないでください。
-フロントへ置いてよいのは、次の接続で使う公開用のFunction URLとPublishable keyだけです。
+`KAMEPOSU_SERVICE_ROLE_KEY` は絶対にGitHub Pagesやフロントエンドへ入れないでください。
+フロントへ置いてよいのは、公開用のFunction URLだけです。

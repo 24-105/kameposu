@@ -6,6 +6,10 @@
     <meta name="robots" content="index,follow" />
     <meta name="theme-color" content="#128994" />
     <meta name="application-name" content="かめぽす便" />
+    <meta
+      name="kameposu-ranking-api"
+      content="https://aepmulwggolnvnubsvfo.supabase.co/functions/v1/ranking"
+    />
     <meta name="apple-mobile-web-app-title" content="かめぽす便" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -88,23 +92,42 @@
             <p id="dateLabel" class="date-label"></p>
           </div>
           <div class="top-actions">
-            <button id="startButton" class="primary-button" type="button">
-              配達へ
+            <button
+              id="homeRankingButton"
+              class="guide-action guide-action-ranking"
+              type="button"
+              data-copy="ui.ranking"
+              data-copy-aria-label="ui.rankingAria"
+            >
+            </button>
+            <button
+              id="recommendButton"
+              class="guide-action guide-action-recommend"
+              type="button"
+              data-copy="ui.recommendations"
+              data-copy-aria-label="ui.recommendationsAria"
+            >
+            </button>
+            <button
+              id="startButton"
+              class="primary-button"
+              type="button"
+              data-copy="buttons.todayDelivery"
+            >
             </button>
           </div>
         </header>
 
         <div class="hud" aria-label="かめ便の状況">
           <div class="time-card">
-            <span>時間</span>
+            <span data-copy="ui.time"></span>
             <strong id="timeValue">60.0</strong>
-            <small id="timePhase" class="time-phase" aria-hidden="true"></small>
             <div id="timeGauge" class="time-gauge" aria-hidden="true">
               <i></i>
             </div>
           </div>
           <div class="score-card">
-            <span>スコア</span>
+            <span data-copy="terms.score"></span>
             <strong id="scoreValue">0</strong>
             <small id="scoreGoal" class="score-goal" aria-hidden="true"></small>
             <small
@@ -114,11 +137,11 @@
             ></small>
           </div>
           <div>
-            <span>お届け</span>
+            <span data-copy="terms.delivery"></span>
             <strong id="deliveryValue">0</strong>
           </div>
           <div class="combo-card">
-            <span>連便</span>
+            <span data-copy="terms.combo"></span>
             <strong id="comboValue">0</strong>
             <div id="comboMeter" class="combo-meter" aria-hidden="true">
               <i></i>
@@ -135,50 +158,40 @@
             height="400"
             aria-label="かめぽす便のゲーム画面"
           >
-            かめぽす便は、日替わりの街で荷物を拾って家へ届ける1分間の無料ブラウザゲームです。
+            かめぽす便は、日替わりの街でバッグを拾って家へ届ける1分間の無料ブラウザゲームです。
           </canvas>
           <div id="startGuide" class="start-guide" aria-live="polite">
-            <strong>バッグを甲羅にのせて家へ</strong>
+            <strong data-copy="ui.guideTitle"></strong>
             <div class="guide-story" aria-label="今日のかめ便">
-              <span>今日のかめ便</span>
-              <strong id="guideStoryCopy">祭り前の商店街へ、急ぎの荷物を届ける</strong>
+              <span data-copy="ui.dailyMission"></span>
+              <strong id="guideStoryCopy">バッグを家へ配達しよう</strong>
+              <small id="guideMissionMeta">3件配達 / +300</small>
             </div>
-            <div class="guide-demo" aria-label="線の見本">
+            <div class="guide-demo" data-copy-aria-label="ui.guideDemoAria">
               <div class="guide-demo-map" aria-hidden="true">
                 <span class="guide-demo-road guide-demo-road-horizontal"></span>
                 <span class="guide-demo-road guide-demo-road-vertical"></span>
                 <span class="guide-demo-route guide-demo-route-pickup"></span>
                 <span class="guide-demo-route guide-demo-route-delivery"></span>
+                <span class="guide-demo-trace"></span>
+                <span class="guide-demo-finger"></span>
                 <span class="guide-demo-turtle"></span>
                 <span class="guide-demo-package"></span>
                 <span class="guide-demo-home"></span>
               </div>
-              <p>
-                <b>黄色線</b><span>バッグへ</span><i>赤線</i><span>家へ</span>
-              </p>
             </div>
             <div class="guide-rules" aria-label="基本ルール">
-              <span class="guide-rule-control">道をなぞるとカメが進む</span>
+              <span data-copy="guideRules.pickup"></span>
+              <span data-copy="guideRules.delivery"></span>
+              <span data-copy="guideRules.goal"></span>
             </div>
-            <button id="guideStartButton" class="guide-start-button" type="button">
-              配達に行く
+            <button
+              id="guideStartButton"
+              class="guide-start-button"
+              type="button"
+              data-copy="buttons.todayDelivery"
+            >
             </button>
-            <div class="guide-actions">
-              <button
-                id="homeRankingButton"
-                class="guide-action guide-action-ranking"
-                type="button"
-              >
-                ランキング
-              </button>
-              <button
-                id="recommendButton"
-                class="guide-action guide-action-recommend"
-                type="button"
-              >
-                おすすめ
-              </button>
-            </div>
           </div>
           <div id="countdownOverlay" class="countdown-overlay is-hidden"></div>
           <div
@@ -187,56 +200,61 @@
             aria-live="polite"
           >
             <div class="pause-panel">
-              <h2>甲羅でひと休み</h2>
+              <h2 data-copy="ui.pauseTitle"></h2>
               <div class="pause-guide" aria-label="ルール説明">
-                <strong>バッグを甲羅にのせて家へ</strong>
-                <div class="guide-demo" aria-label="線の見本">
+                <strong data-copy="ui.guideTitle"></strong>
+                <div class="guide-demo" data-copy-aria-label="ui.guideDemoAria">
                   <div class="guide-demo-map" aria-hidden="true">
                     <span class="guide-demo-road guide-demo-road-horizontal"></span>
                     <span class="guide-demo-road guide-demo-road-vertical"></span>
                     <span class="guide-demo-route guide-demo-route-pickup"></span>
                     <span class="guide-demo-route guide-demo-route-delivery"></span>
+                    <span class="guide-demo-trace"></span>
+                    <span class="guide-demo-finger"></span>
                     <span class="guide-demo-turtle"></span>
                     <span class="guide-demo-package"></span>
                     <span class="guide-demo-home"></span>
                   </div>
-                  <p>
-                    <b>黄色線</b><span>バッグへ</span><i>赤線</i><span>家へ</span>
-                  </p>
                 </div>
-                <div class="guide-rules" aria-label="基本ルール">
-                  <span class="guide-rule-control">道をなぞるとカメが進む</span>
+                <div class="guide-rules" data-copy-aria-label="ui.rulesAria">
+                  <span data-copy="guideRules.pickup"></span>
+                  <span data-copy="guideRules.delivery"></span>
+                  <span data-copy="guideRules.goal"></span>
                 </div>
                 <div class="control-mode-switch" aria-label="操作方法">
-                  <span>操作方法</span>
+                  <span data-copy="ui.controls"></span>
                   <button
                     type="button"
                     data-control-mode-option="drag"
-                    aria-label="画面をなぞって操作"
+                    data-copy="ui.dragControl"
+                    data-copy-aria-label="ui.dragControlAria"
                     aria-pressed="true"
                   >
-                    画面をなぞる
                   </button>
                   <button
                     type="button"
                     data-control-mode-option="pad"
-                    aria-label="下の十字キーで操作"
+                    data-copy="ui.padControl"
+                    data-copy-aria-label="ui.padControlAria"
                     aria-pressed="false"
                   >
-                    下の十字キー
                   </button>
                 </div>
               </div>
               <div class="pause-actions">
-                <button id="resumeButton" class="primary-button" type="button">
-                  配達へ戻る
+                <button
+                  id="resumeButton"
+                  class="primary-button"
+                  type="button"
+                  data-copy="buttons.resume"
+                >
                 </button>
                 <button
                   id="pauseRetryButton"
                   class="secondary-button"
                   type="button"
+                  data-copy="buttons.restart"
                 >
-                  走り直す
                 </button>
               </div>
               <div class="pause-menu-actions" aria-label="一時停止中のメニュー">
@@ -245,14 +263,14 @@
                   class="guide-action guide-action-ranking"
                   type="button"
                 >
-                  <span class="pause-action-label">ランキング</span>
+                  <span class="pause-action-label" data-copy="ui.ranking"></span>
                 </button>
                 <button
                   id="pauseRecommendButton"
                   class="guide-action guide-action-recommend"
                   type="button"
                 >
-                  <span class="pause-action-label">おすすめ</span>
+                  <span class="pause-action-label" data-copy="ui.recommendations"></span>
                 </button>
               </div>
             </div>
@@ -270,23 +288,12 @@
           <button
             class="item-button"
             type="button"
-            data-manual-item="clock"
-            aria-label="時計を使う"
-            disabled
-          >
-            <span class="item-icon item-icon-clock" aria-hidden="true"></span>
-            <span>時計</span>
-            <strong data-item-count>1</strong>
-          </button>
-          <button
-            class="item-button"
-            type="button"
             data-manual-item="shield"
             aria-label="甲羅守りを使う"
             disabled
           >
             <span class="item-icon item-icon-shield" aria-hidden="true"></span>
-            <span>甲羅守り</span>
+            <span data-copy="ui.shellGuard"></span>
             <strong data-item-count>1</strong>
           </button>
           <button
@@ -297,7 +304,7 @@
             disabled
           >
             <span class="item-icon item-icon-magnet" aria-hidden="true"></span>
-            <span>磁石</span>
+            <span data-copy="ui.magnet"></span>
             <strong data-item-count>1</strong>
           </button>
           <button
@@ -308,7 +315,7 @@
             disabled
           >
             <span class="item-icon item-icon-bolt" aria-hidden="true"></span>
-            <span>追い風</span>
+            <span data-copy="ui.tailwind"></span>
             <strong data-item-count>1</strong>
           </button>
           <button
@@ -319,7 +326,7 @@
             disabled
           >
             <span class="item-icon item-icon-flight" aria-hidden="true"></span>
-            <span>ひこうき</span>
+            <span data-copy="ui.airplane"></span>
             <strong data-item-count>0</strong>
           </button>
         </div>
@@ -328,37 +335,37 @@
       <section id="menuScreen" class="menu-screen is-hidden" aria-live="polite">
         <div class="menu-panel">
           <div class="menu-heading">
-            <h2 id="menuTitle">ランキング</h2>
+            <h2 id="menuTitle" data-copy="ui.ranking"></h2>
             <button
               id="menuCloseButton"
               class="secondary-button menu-close-button"
               type="button"
+              data-copy="buttons.back"
             >
-              戻る
             </button>
           </div>
 
           <div id="menuRankingPanel" class="menu-content">
             <section class="ranking-block">
               <div class="section-heading">
-                <h2>今日のランキング</h2>
+                <h2 data-copy="ui.todayRanking"></h2>
               </div>
               <ol id="homeTodayRanking" class="ranking-list"></ol>
             </section>
 
             <section class="ranking-block">
               <div class="section-heading">
-                <h2>今週の1位</h2>
+                <h2 data-copy="result.weeklyChampion"></h2>
               </div>
               <div id="homeWeekRanking" class="week-list"></div>
             </section>
           </div>
 
           <div id="menuRecommendPanel" class="menu-content" hidden>
-            <section class="recommend-block" aria-label="おすすめのゲーム">
+            <section class="recommend-block" data-copy-aria-label="ui.recommendBlockAria">
               <div class="recommend-heading">
-                <span>次に遊ぶ</span>
-                <strong>スマホで遊べる</strong>
+                <span data-copy="ui.nextPlay"></span>
+                <strong data-copy="ui.mobileGames"></strong>
               </div>
               <div class="recommend-list">
                 <a
@@ -366,7 +373,7 @@
                   href="https://24-105.github.io/classic-single-obstacle-ride/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label="おすすめゲーム"
+                  data-copy-aria-label="ui.recommendCardAria"
                 >
                   <span class="recommend-card-art" aria-hidden="true">
                     <img
@@ -383,14 +390,14 @@
                     <strong></strong>
                     <small></small>
                   </span>
-                  <b aria-hidden="true">遊ぶ</b>
+                  <b aria-hidden="true" data-copy="ui.play"></b>
                 </a>
                 <a
                   class="recommend-card"
                   href="https://24-105.github.io/machi-narabe/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label="おすすめゲーム"
+                  data-copy-aria-label="ui.recommendCardAria"
                 >
                   <span class="recommend-card-art recommend-card-art-city" aria-hidden="true">
                     <img
@@ -407,14 +414,14 @@
                     <strong></strong>
                     <small></small>
                   </span>
-                  <b aria-hidden="true">遊ぶ</b>
+                  <b aria-hidden="true" data-copy="ui.play"></b>
                 </a>
                 <a
                   class="recommend-card"
                   href="https://24-105.github.io/hitoyo-saishucho/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label="おすすめゲーム"
+                  data-copy-aria-label="ui.recommendCardAria"
                 >
                   <span class="recommend-card-art recommend-card-art-night" aria-hidden="true">
                     <img
@@ -431,7 +438,7 @@
                     <strong></strong>
                     <small></small>
                   </span>
-                  <b aria-hidden="true">遊ぶ</b>
+                  <b aria-hidden="true" data-copy="ui.play"></b>
                 </a>
               </div>
             </section>
@@ -445,62 +452,74 @@
         aria-live="polite"
       >
         <div class="game-set-panel">
+          <div id="resultCelebration" class="result-celebration is-hidden" aria-hidden="true"></div>
           <div class="game-set-heading">
             <div>
               <div class="result-headline">
-                <h2>お届け完了</h2>
+                <h2 data-copy="result.finished"></h2>
                 <strong id="resultGrade" class="result-grade grade-d"
-                  ><span>ランク</span><b>D</b></strong
+                  ><span data-copy="ui.rank"></span><b>D</b></strong
                 >
               </div>
               <div class="result-name-line">
-                <span>カメ配達員</span>
+                <span data-copy="ui.turtleCourier"></span>
                 <strong id="resultName">-</strong>
               </div>
               <p id="resultMissionLine" class="result-mission-line">今日のかめ便</p>
               <span id="resultBestBadge" class="result-best-badge is-hidden"
-                >自己最高更新</span
+                data-copy="result.bestUpdated"></span
               >
+              <div id="resultShareBox" class="result-share-box is-hidden">
+                <button id="resultShareButton" type="button" data-copy="share.button"></button>
+                <button
+                  id="resultShareImageButton"
+                  class="result-share-image-button"
+                  type="button"
+                  data-copy="share.imageButton"
+                >
+                </button>
+                <span id="resultShareStatus" aria-live="polite"></span>
+              </div>
             </div>
           </div>
 
           <div class="result-insight">
             <div>
-              <span>今日の番付</span>
+              <span data-copy="ui.todayRanking"></span>
               <strong id="resultRank">-</strong>
             </div>
             <div class="result-score-hero">
-              <span>スコア</span>
+              <span data-copy="terms.score"></span>
               <strong id="resultScoreHero">0</strong>
             </div>
             <p id="resultGap">-</p>
           </div>
-
-          <p id="resultTip" class="result-tip">-</p>
-
-          <section class="result-next-card" aria-label="次回の狙い">
-            <div class="result-next-heading">
-              <span>次の一便</span>
-              <strong>甲羅メモ</strong>
-            </div>
-            <div
-              id="resultNextMoves"
-              class="retry-cues"
-              aria-label="次回の狙い"
-            ></div>
-          </section>
 
           <div class="result-retry-dock">
             <button
               id="retryButton"
               class="primary-button retry-dock-button"
               type="button"
+              data-copy="buttons.retry"
             >
-              もう一便
             </button>
           </div>
 
-          <div class="result-tabs" role="tablist" aria-label="結果表示">
+          <p id="resultTip" class="result-tip">-</p>
+
+          <section class="result-next-card" data-copy-aria-label="ui.resultTargetAria">
+            <div class="result-next-heading">
+              <span data-copy="ui.nextDelivery"></span>
+              <strong data-copy="ui.turtleMemo"></strong>
+            </div>
+            <div
+              id="resultNextMoves"
+              class="retry-cues"
+              data-copy-aria-label="ui.resultTargetAria"
+            ></div>
+          </section>
+
+          <div class="result-tabs" role="tablist" data-copy-aria-label="ui.resultTabsAria">
             <button
               id="resultTabSummary"
               class="result-tab is-active"
@@ -509,8 +528,8 @@
               data-result-tab="summary"
               aria-selected="true"
               aria-controls="resultSummaryPanel"
+              data-copy="ui.deliveryMemo"
             >
-              配達メモ
             </button>
             <button
               id="resultTabRanking"
@@ -520,8 +539,8 @@
               data-result-tab="ranking"
               aria-selected="false"
               aria-controls="resultRankingPanel"
+              data-copy="ui.ranking"
             >
-              ランキング
             </button>
           </div>
 
@@ -534,12 +553,12 @@
             <div
               id="resultHighlights"
               class="highlight-strip"
-              aria-label="今回の見どころ"
+              data-copy-aria-label="ui.highlightsAria"
             ></div>
             <div
               id="resultMedals"
               class="medal-strip"
-              aria-label="今回の勲章"
+              data-copy-aria-label="ui.medalsAria"
             ></div>
 
             <button
@@ -548,72 +567,80 @@
               type="button"
               aria-expanded="false"
               aria-controls="resultDetailPanel"
+              data-copy="ui.detailOpen"
             >
-              詳細を開く
             </button>
 
             <div id="resultDetailPanel" class="detail-panel" hidden>
               <div class="best-strip">
                 <div>
-                  <span>この端末の最高スコア</span>
+                  <span data-copy="ui.bestScore"></span>
                   <strong id="resultSessionBest">0</strong>
                 </div>
                 <div>
-                  <span id="resultBestDeltaLabel">自己最高まで</span>
+                  <span id="resultBestDeltaLabel" data-copy="result.bestTarget"></span>
                   <strong id="resultBestDelta">-</strong>
                 </div>
               </div>
 
               <div class="result-divider">
-                <span>スコア内訳</span>
+                <span data-copy="ui.scoreBreakdown"></span>
               </div>
 
               <div
                 id="resultBreakdown"
                 class="score-breakdown"
-                aria-label="スコア内訳"
+                data-copy-aria-label="ui.scoreBreakdown"
               ></div>
 
               <div class="result-grid">
                 <div>
-                  <span>お届け数</span>
+                  <span data-copy="ui.deliveryCount"></span>
                   <strong id="resultDeliveries">0</strong>
                 </div>
                 <div>
-                  <span>連便</span>
+                  <span data-copy="ui.maxCombo"></span>
                   <strong id="resultCombo">0</strong>
                 </div>
                 <div>
-                  <span>時計</span>
+                  <span data-copy="ui.clock"></span>
                   <strong id="resultItemClock">0</strong>
                 </div>
                 <div>
-                  <span>甲羅守り</span>
+                  <span data-copy="ui.shellGuard"></span>
                   <strong id="resultItemShield">0</strong>
                 </div>
                 <div>
-                  <span>磁石</span>
+                  <span data-copy="ui.magnet"></span>
                   <strong id="resultItemMagnet">0</strong>
                 </div>
                 <div>
-                  <span>追い風</span>
+                  <span data-copy="ui.tailwind"></span>
                   <strong id="resultItemTurbo">0</strong>
                 </div>
                 <div>
-                  <span>ひこうき</span>
+                  <span data-copy="ui.airplane"></span>
                   <strong id="resultItemFlight">0</strong>
                 </div>
                 <div>
-                  <span>星</span>
+                  <span data-copy="ui.star"></span>
                   <strong id="resultItemStar">0</strong>
                 </div>
                 <div>
-                  <span>ぶつかった数</span>
+                  <span data-copy="ui.bumps"></span>
                   <strong id="resultCollisions">0</strong>
                 </div>
                 <div>
-                  <span>すれすれ回避</span>
+                  <span data-copy="ui.nearMiss"></span>
                   <strong id="resultNearMisses">0</strong>
+                </div>
+                <div>
+                  <span data-copy="ui.totalDeliveries"></span>
+                  <strong id="resultTotalDeliveries">0</strong>
+                </div>
+                <div>
+                  <span data-copy="ui.totalPlays"></span>
+                  <strong id="resultTotalPlays">0</strong>
                 </div>
               </div>
             </div>
@@ -628,14 +655,14 @@
           >
             <section class="ranking-block">
               <div class="section-heading">
-                <h2>今日のランキング</h2>
+                <h2 data-copy="ui.todayRanking"></h2>
               </div>
               <ol id="todayRanking" class="ranking-list"></ol>
             </section>
 
             <section class="ranking-block">
               <div class="section-heading">
-                <h2>今週の1位</h2>
+                <h2 data-copy="result.weeklyChampion"></h2>
               </div>
               <div id="weekRanking" class="week-list"></div>
             </section>
@@ -643,11 +670,11 @@
 
           <section
             class="recommend-block result-recommend-block"
-            aria-label="おすすめのゲーム"
+            data-copy-aria-label="ui.recommendBlockAria"
           >
             <div class="recommend-heading">
-              <span>次に遊ぶ</span>
-              <strong>スマホで遊べる</strong>
+              <span data-copy="ui.nextPlay"></span>
+              <strong data-copy="ui.mobileGames"></strong>
             </div>
             <div class="recommend-list">
               <a
@@ -655,7 +682,7 @@
                 href="https://24-105.github.io/classic-single-obstacle-ride/"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="おすすめゲーム"
+                data-copy-aria-label="ui.recommendCardAria"
               >
                 <span class="recommend-card-art" aria-hidden="true">
                   <img
@@ -672,14 +699,14 @@
                   <strong></strong>
                   <small></small>
                 </span>
-                <b aria-hidden="true">遊ぶ</b>
+                <b aria-hidden="true" data-copy="ui.play"></b>
               </a>
               <a
                 class="recommend-card"
                 href="https://24-105.github.io/machi-narabe/"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="おすすめゲーム"
+                data-copy-aria-label="ui.recommendCardAria"
               >
                 <span class="recommend-card-art recommend-card-art-city" aria-hidden="true">
                   <img
@@ -696,14 +723,14 @@
                   <strong></strong>
                   <small></small>
                 </span>
-                <b aria-hidden="true">遊ぶ</b>
+                <b aria-hidden="true" data-copy="ui.play"></b>
               </a>
               <a
                 class="recommend-card"
                 href="https://24-105.github.io/hitoyo-saishucho/"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="おすすめゲーム"
+                data-copy-aria-label="ui.recommendCardAria"
               >
                 <span class="recommend-card-art recommend-card-art-night" aria-hidden="true">
                   <img
@@ -720,18 +747,19 @@
                   <strong></strong>
                   <small></small>
                 </span>
-                <b aria-hidden="true">遊ぶ</b>
+                <b aria-hidden="true" data-copy="ui.play"></b>
               </a>
             </div>
           </section>
 
           <p class="thanks-card">
-            <span>また甲羅便を届けに来てね。</span>
+            <span data-copy="ui.thanks"></span>
           </p>
         </div>
       </section>
     </main>
 
+    <script defer src="./src/copy.js"></script>
     <script defer src="./src/main.js"></script>
   </body>
 </html>
