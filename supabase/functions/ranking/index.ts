@@ -326,14 +326,9 @@ function assertFreshDateKey(dateKey: string) {
 
 function getCurrentWeekDateKeys(dateKey: string) {
   const current = parseDateKey(dateKey);
-  const day = current.getUTCDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  const monday = new Date(current);
-  monday.setUTCDate(current.getUTCDate() + mondayOffset);
-
   return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(monday);
-    date.setUTCDate(monday.getUTCDate() + index);
+    const date = new Date(current);
+    date.setUTCDate(current.getUTCDate() - (6 - index));
     return formatDateKey(date);
   });
 }

@@ -17,7 +17,7 @@ window.KAMEPOSU_COPY = Object.freeze({
   result: Object.freeze({
     finished: "配達完了",
     bestUpdated: "自己ベスト更新！",
-    weeklyChampion: "今週のデイリーチャンピオン",
+    weeklyChampion: "7日分チャンピオン",
     bestTarget: "自己ベストまで",
     bestTie: "同じスコア",
     updated: "更新",

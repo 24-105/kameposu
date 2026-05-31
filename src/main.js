@@ -27,6 +27,7 @@ const CAMERA_IDLE_Y_ANCHOR = 0.28;
 const CAMERA_DEFAULT_Y_ANCHOR = 0.54;
 const SCORE_KEY = "delivery-panic-session-scores-v1";
 const PROFILE_KEY = "kameposu-player-profile-v1";
+const PROFILE_NAME_STYLE = "turtle-v2";
 const CONTROL_MODE_KEY = "kameposu-control-mode-v1";
 const BLANK_FAVICON_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 const MAX_CARRY_PACKAGES = 3;
@@ -73,6 +74,12 @@ const HELI_DELIVERY_SCORE = 105;
 const HELI_DELIVERY_SECONDS = 1.15;
 const MAX_FLOAT_TEXTS = 7;
 const MAX_SCREEN_TEXTS = 4;
+const MAX_PARTICLES = 72;
+const MAP_CULL_PADDING_TILES = 2;
+const MAX_CANVAS_DPR =
+  (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) ? 1.5 : 2;
+const PARTICLE_QUALITY =
+  (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) ? 0.55 : 0.72;
 const RANKING_API_TIMEOUT_MS = 3200;
 const SCORE_SUBMISSION_MATCH_WINDOW_MS = 5 * 60 * 1000;
 const MANUAL_CLOCK_SECONDS = 4.0;
@@ -105,6 +112,7 @@ const deliveryValue = document.querySelector("#deliveryValue");
 const comboValue = document.querySelector("#comboValue");
 const comboCard = comboValue.closest("div");
 const comboMeter = document.querySelector("#comboMeter");
+const comboMeterDots = [...comboMeter.querySelectorAll("i")];
 const countdownOverlay = document.querySelector("#countdownOverlay");
 const pauseOverlay = document.querySelector("#pauseOverlay");
 const resumeButton = document.querySelector("#resumeButton");
@@ -118,6 +126,7 @@ const guideStoryCopy = document.querySelector("#guideStoryCopy");
 const guideMissionMeta = document.querySelector("#guideMissionMeta");
 const guideStartButton = document.querySelector("#guideStartButton");
 const itemBar = document.querySelector("#itemBar");
+const manualItemButtons = [...document.querySelectorAll("[data-manual-item]")];
 const menuScreen = document.querySelector("#menuScreen");
 const menuTitle = document.querySelector("#menuTitle");
 const menuCloseButton = document.querySelector("#menuCloseButton");
@@ -214,97 +223,88 @@ const keyToDirection = {
 };
 
 const shortNameAdjectives = [
-  "ぽすぽす",
-  "ふわっと",
-  "てくてく",
-  "すいすい",
-  "きらり",
-  "にこにこ",
-  "ぽやぽや",
-  "ゆるめ",
-  "こっそり",
-  "まよい",
-  "ちらり",
+  "ちびかめ",
+  "まるかめ",
+  "のそかめ",
+  "ぽてかめ",
+  "にこかめ",
+  "こかめ",
+  "甲羅ぽか",
+  "甲羅きら",
+  "甲羅もち",
+  "みどり",
   "のんびり",
-  "あわて",
-  "すました",
-  "ななめ",
-  "ひらり",
-  "むにゅ",
-  "ぴかぴか",
-  "ちょい",
-  "ニヤリ",
-  "キラリ",
-  "ぽてぽて",
-  "ふにゃり",
-  "カメ",
-  "バッグ",
-  "ベル",
-  "ポスト",
-  "ミニ",
+  "てくてく",
+  "ぽすぽす",
+  "ほのぼの",
+  "ひなた",
+  "おさんぽ",
+  "ころころ",
+  "ぴょこ",
+  "まめ",
+  "ふわ",
+  "すや",
+  "はりきり",
+  "おっとり",
+  "きらり",
+  "ゆる",
+  "ちょこ",
+  "あさつゆ",
   "夕やけ",
-  "雨あがり",
-  "角まち",
-  "夜風",
-  "まるい",
-  "すやすや",
-  "きびきび",
-  "くるり",
-  "ほんのり",
-  "おすまし",
-  "うきうき",
+  "葉っぱ",
+  "小道",
+  "路地",
+  "甲羅",
+  "しっぽ",
+  "おてがみ",
+  "ポスト",
+  "ベル",
 ];
 
 const shortNameLinks = [
   "の",
-  "系",
-  "風",
-  "派",
-  "味",
-  "組",
+  "な",
+  "と",
+  "は",
+  "も",
+  "ぽ",
 ];
 
 const shortNameNouns = [
-  "カメ便",
-  "ポスト係",
-  "ベル係",
-  "バッグ番",
-  "地図さん",
-  "道くさ便",
-  "配達屋",
-  "バッグさん",
-  "配達っこ",
-  "バッグくん",
-  "玄関番",
-  "右まがり",
-  "左まがり",
-  "角のひと",
-  "坂道さん",
-  "紙袋さん",
-  "番地メモ",
-  "時計さん",
-  "ワープ便",
-  "追い風便",
-  "磁石さん",
-  "ゆる便",
-  "あせり便",
-  "すまし便",
-  "まよい便",
-  "近道っこ",
-  "遠回り便",
-  "呼び鈴さん",
-  "台車くん",
-  "封筒さん",
-  "看板さん",
-  "安全番",
-  "夕やけ便",
-  "雨がっぱさん",
-  "路地っこ",
+  "甲羅便",
+  "こかめ便",
+  "かめポス",
+  "かめっこ",
+  "甲羅っこ",
   "甲羅さん",
-  "庭先便",
-  "お手紙さん",
-  "小道さん",
-  "朝いち便",
+  "おてがみ便",
+  "葉っぱ便",
+  "ひなた便",
+  "さんぽ便",
+  "ベル便",
+  "ポスト便",
+  "庭先かめ",
+  "路地かめ",
+  "坂道かめ",
+  "水路かめ",
+  "玄関かめ",
+  "まちかめ",
+  "ぽすかめ",
+  "バッグかめ",
+  "のそ便",
+  "てく便",
+  "ぽて便",
+  "ぴょこ便",
+  "小包かめ",
+  "呼び鈴かめ",
+  "朝いちかめ",
+  "夕やけかめ",
+  "雨あがり便",
+  "道くさかめ",
+  "近道かめ",
+  "遠回りかめ",
+  "甲羅メモ",
+  "番地かめ",
 ];
 
 const todayKey = getJstDateKey(new Date());
@@ -326,6 +326,9 @@ let supportItems;
 let hazards;
 let audioContext = null;
 let onlineRanking = createOnlineRankingState();
+let canvasSizeDirty = true;
+let manualItemsSignature = "";
+let lastManualItemsRender = 0;
 
 applyPreparedRun(createPreparedRun("idle"));
 
@@ -344,11 +347,15 @@ renderGuideIcons();
 
 if ("ResizeObserver" in window) {
   const resizeObserver = new ResizeObserver(() => {
+    canvasSizeDirty = true;
     drawScene();
   });
   resizeObserver.observe(canvas);
 } else {
-  window.addEventListener("resize", drawScene);
+  window.addEventListener("resize", () => {
+    canvasSizeDirty = true;
+    drawScene();
+  });
 }
 
 startButton.addEventListener("click", handlePrimaryButton);
@@ -1042,7 +1049,7 @@ function tick(now) {
   drawScene();
   updateHud();
 
-  if (activeRun.status === "idle" || activeRun.status === "ended") {
+  if (activeRun.status === "idle" || activeRun.status === "ended" || activeRun.status === "paused") {
     animationFrame = 0;
     return;
   }
@@ -1804,14 +1811,20 @@ function useManualItem(kind) {
   updateManualItems();
 }
 
-function updateManualItems() {
+function updateManualItems(force = false) {
   const recommendedItems = getRecommendedManualItems();
-  document.querySelectorAll("[data-manual-item]").forEach((button) => {
+  const signature = createManualItemsSignature(recommendedItems);
+  const now = performance.now();
+  if (!force && signature === manualItemsSignature && now - lastManualItemsRender < 140) return;
+  manualItemsSignature = signature;
+  lastManualItemsRender = now;
+
+  manualItemButtons.forEach((button) => {
     const kind = button.dataset.manualItem;
     const count = activeRun.manualItems?.[kind] ?? 0;
     const activeSeconds = getManualItemActiveSeconds(kind);
     const countLabel = button.querySelector("[data-item-count]");
-    if (countLabel) countLabel.textContent = count;
+    if (countLabel) setTextIfChanged(countLabel, count);
     button.disabled = activeRun.status !== "running" || count <= 0 || activeSeconds > 0;
     button.classList.toggle("is-active", activeSeconds > 0);
     button.classList.toggle("is-empty", count <= 0 && activeSeconds <= 0);
@@ -1819,6 +1832,19 @@ function updateManualItems() {
     button.classList.toggle("is-recommended", recommendedItems.has(kind) && count > 0 && activeSeconds <= 0);
   });
   itemBar.classList.toggle("is-running", activeRun.status === "running");
+}
+
+function createManualItemsSignature(recommendedItems) {
+  return manualItemButtons
+    .map((button) => {
+      const kind = button.dataset.manualItem;
+      const count = activeRun.manualItems?.[kind] ?? 0;
+      const active = getManualItemActiveSeconds(kind) > 0 ? 1 : 0;
+      const ready = activeRun.status === "running" && count > 0 && !active ? 1 : 0;
+      const recommended = recommendedItems.has(kind) ? 1 : 0;
+      return `${kind}:${count}:${active}:${ready}:${recommended}`;
+    })
+    .join("|");
 }
 
 function getRecommendedManualItems() {
@@ -2719,8 +2745,8 @@ function getRankInfo(record) {
       gap: 0,
       topGap: 0,
       rankLabel: COPY.rankingText.firstPlace,
-      gapLabel: COPY.rankingText.firstNow,
-      topGapLabel: COPY.rankingText.firstKeep,
+      gapLabel: "",
+      topGapLabel: "",
     };
   }
 
@@ -3228,7 +3254,7 @@ function getResultNextMoves(record, rankInfo, previousSessionBest) {
       value: `あと${formatNumber(rankInfo.gap)}`,
     });
   }
-  if (record.score <= previousSessionBest && previousSessionBest > 0) {
+  if (record.score < previousSessionBest && previousSessionBest > 0) {
     moves.push({ label: COPY.result.bestTarget, value: `あと${formatNumber(previousSessionBest - record.score + 1)}` });
   }
   if (record.deliveries < 12) moves.push({ label: COPY.nextMoves.deliveryCount, value: `あと${12 - record.deliveries}件で12件` });
@@ -3297,17 +3323,17 @@ function updateHud() {
   const isLastSpurt = isLastSpurtActive();
   gameColumn.dataset.runStatus = activeRun.status;
   startButton.classList.toggle("is-guide-hidden", activeRun.status === "idle" && !startGuide.classList.contains("is-hidden"));
-  timeValue.textContent = activeRun.timeLeft.toFixed(1);
+  setTextIfChanged(timeValue, activeRun.timeLeft.toFixed(1));
   const timeProgress = clamp(activeRun.timeLeft / GAME_SECONDS, 0, 1);
-  timeGaugeFill.style.transform = `scaleX(${timeProgress})`;
-  scoreValue.textContent = formatNumber(activeRun.score);
+  setStyleIfChanged(timeGaugeFill, "transform", `scaleX(${timeProgress})`);
+  setTextIfChanged(scoreValue, formatNumber(activeRun.score));
   scoreCard.classList.toggle("is-score-pop", activeRun.scorePulse > 0);
-  scoreGoal.textContent = getScoreGoalLabel();
+  setTextIfChanged(scoreGoal, getScoreGoalLabel());
   scoreCard.classList.toggle("is-best-ahead", activeRun.status === "running" && activeRun.bestTarget > 0 && activeRun.score > activeRun.bestTarget);
-  scoreDelta.textContent = getScoreDeltaLabel();
+  setTextIfChanged(scoreDelta, getScoreDeltaLabel());
   scoreDelta.classList.toggle("is-negative", activeRun.scoreDelta < 0);
-  deliveryValue.textContent = activeRun.deliveries;
-  comboValue.textContent = activeRun.combo;
+  setTextIfChanged(deliveryValue, activeRun.deliveries);
+  setTextIfChanged(comboValue, activeRun.combo);
   updateComboMeter();
   updateManualItems();
   timeCard.classList.toggle("is-danger", activeRun.status === "running" && activeRun.timeLeft <= 6);
@@ -3315,6 +3341,19 @@ function updateHud() {
   timeCard.classList.toggle("is-last-spurt", isLastSpurt);
   document.body.classList.toggle("is-rush", activeRun.status === "running" && activeRun.rush > 0);
   document.body.classList.toggle("is-last-spurt", isLastSpurt);
+}
+
+function setTextIfChanged(element, value) {
+  const nextValue = String(value ?? "");
+  if (element.textContent !== nextValue) {
+    element.textContent = nextValue;
+  }
+}
+
+function setStyleIfChanged(element, property, value) {
+  if (element.style[property] !== value) {
+    element.style[property] = value;
+  }
 }
 
 function getScoreGoalLabel() {
@@ -3338,7 +3377,7 @@ function updateComboMeter() {
   const progress = activeRun.combo % 3 || (activeRun.combo > 0 ? 3 : 0);
   const isNearRush = activeRun.status === "running" && activeRun.rush <= 0 && activeRun.combo % 3 === 2;
   const isRushing = activeRun.status === "running" && activeRun.rush > 0;
-  comboMeter.querySelectorAll("i").forEach((item, index) => {
+  comboMeterDots.forEach((item, index) => {
     item.classList.toggle("is-filled", index < progress);
   });
   comboCard.classList.toggle("is-near-rush", isNearRush);
@@ -3362,7 +3401,7 @@ function drawScene() {
   ctx.translate(shake.x, shake.y);
   ctx.scale(camera.scale, camera.scale);
   ctx.translate(-camera.x, -camera.y);
-  drawMap();
+  drawMap(camera);
   if (activeRun.status === "idle") {
     drawTargetRoute();
     drawJob();
@@ -3434,10 +3473,12 @@ function drawLastSpurtVignette() {
 }
 
 function syncCanvasSize() {
+  if (!canvasSizeDirty && canvas.width > 0 && canvas.height > 0) return;
+
   const rect = canvas.getBoundingClientRect();
   const width = Math.max(1, Math.round(rect.width || canvas.clientWidth || canvas.width));
   const height = Math.max(1, Math.round(rect.height || canvas.clientHeight || canvas.height));
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = Math.min(window.devicePixelRatio || 1, MAX_CANVAS_DPR);
   const backingWidth = Math.round(width * dpr);
   const backingHeight = Math.round(height * dpr);
 
@@ -3449,6 +3490,8 @@ function syncCanvasSize() {
     canvas.width = backingWidth;
     canvas.height = backingHeight;
   }
+
+  canvasSizeDirty = false;
 }
 
 function getCamera() {
@@ -3477,12 +3520,13 @@ function getCameraAnchor() {
   return { x: 0.5, y: CAMERA_DEFAULT_Y_ANCHOR };
 }
 
-function drawMap() {
+function drawMap(camera) {
   ctx.fillStyle = "#82b88a";
   ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  const bounds = getVisibleTileBounds(camera);
 
-  for (let row = 0; row < ROWS; row += 1) {
-    for (let col = 0; col < COLS; col += 1) {
+  for (let row = bounds.minRow; row <= bounds.maxRow; row += 1) {
+    for (let col = bounds.minCol; col <= bounds.maxCol; col += 1) {
       const x = col * TILE;
       const y = row * TILE;
 
@@ -3507,6 +3551,24 @@ function drawMap() {
   ctx.strokeStyle = "rgb(22 33 47 / 12%)";
   ctx.lineWidth = 5;
   ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+}
+
+function getVisibleTileBounds(camera) {
+  if (!camera) {
+    return {
+      minCol: 0,
+      maxCol: COLS - 1,
+      minRow: 0,
+      maxRow: ROWS - 1,
+    };
+  }
+
+  return {
+    minCol: clamp(Math.floor(camera.x / TILE) - MAP_CULL_PADDING_TILES, 0, COLS - 1),
+    maxCol: clamp(Math.ceil((camera.x + camera.visibleWidth) / TILE) + MAP_CULL_PADDING_TILES, 0, COLS - 1),
+    minRow: clamp(Math.floor(camera.y / TILE) - MAP_CULL_PADDING_TILES, 0, ROWS - 1),
+    maxRow: clamp(Math.ceil((camera.y + camera.visibleHeight) / TILE) + MAP_CULL_PADDING_TILES, 0, ROWS - 1),
+  };
 }
 
 function drawRoadTile(col, row, x, y) {
@@ -5635,29 +5697,53 @@ function updateEffects(dt) {
     }
   }
 
-  activeRun.floatTexts = activeRun.floatTexts
-    .map((item) => ({
-      ...item,
-      y: item.y + item.vy * dt,
-      ttl: item.ttl - dt,
-    }))
-    .filter((item) => item.ttl > 0);
+  updateFloatTexts(dt);
+  updateScreenTexts(dt);
+  updateParticles(dt);
+}
 
-  activeRun.screenTexts = (activeRun.screenTexts ?? [])
-    .map((item) => ({
-      ...item,
-      ttl: item.ttl - dt,
-    }))
-    .filter((item) => item.ttl > 0);
+function updateFloatTexts(dt) {
+  let writeIndex = 0;
+  for (let index = 0; index < activeRun.floatTexts.length; index += 1) {
+    const item = activeRun.floatTexts[index];
+    item.y += item.vy * dt;
+    item.ttl -= dt;
+    if (item.ttl > 0) {
+      activeRun.floatTexts[writeIndex] = item;
+      writeIndex += 1;
+    }
+  }
+  activeRun.floatTexts.length = writeIndex;
+}
 
-  activeRun.particles = activeRun.particles
-    .map((particle) => ({
-      ...particle,
-      x: particle.x + particle.vx * dt,
-      y: particle.y + particle.vy * dt,
-      ttl: particle.ttl - dt,
-    }))
-    .filter((particle) => particle.ttl > 0);
+function updateScreenTexts(dt) {
+  const texts = activeRun.screenTexts ?? [];
+  let writeIndex = 0;
+  for (let index = 0; index < texts.length; index += 1) {
+    const item = texts[index];
+    item.ttl -= dt;
+    if (item.ttl > 0) {
+      texts[writeIndex] = item;
+      writeIndex += 1;
+    }
+  }
+  texts.length = writeIndex;
+  activeRun.screenTexts = texts;
+}
+
+function updateParticles(dt) {
+  let writeIndex = 0;
+  for (let index = 0; index < activeRun.particles.length; index += 1) {
+    const particle = activeRun.particles[index];
+    particle.x += particle.vx * dt;
+    particle.y += particle.vy * dt;
+    particle.ttl -= dt;
+    if (particle.ttl > 0) {
+      activeRun.particles[writeIndex] = particle;
+      writeIndex += 1;
+    }
+  }
+  activeRun.particles.length = writeIndex;
 }
 
 function addFloatText(x, y, text, color, ttl = 0.9, vy = -32, size = 12) {
@@ -5688,8 +5774,12 @@ function addScreenText(text, tone = "delivery", ttl = 0.9, yRatio = 0.26) {
 }
 
 function createBurst(x, y, color, count) {
-  for (let index = 0; index < count; index += 1) {
-    const angle = (Math.PI * 2 * index) / count + activeRun.rng() * 0.7;
+  const room = MAX_PARTICLES - activeRun.particles.length;
+  const safeCount = Math.max(0, Math.min(room, Math.ceil(count * PARTICLE_QUALITY)));
+  if (safeCount <= 0) return;
+
+  for (let index = 0; index < safeCount; index += 1) {
+    const angle = (Math.PI * 2 * index) / safeCount + activeRun.rng() * 0.7;
     const speed = 34 + activeRun.rng() * 58;
     activeRun.particles.push({
       x,
@@ -5700,6 +5790,10 @@ function createBurst(x, y, color, count) {
       ttl: 0.45 + activeRun.rng() * 0.25,
       radius: 2 + activeRun.rng() * 2.5,
     });
+  }
+
+  if (activeRun.particles.length > MAX_PARTICLES) {
+    activeRun.particles.splice(0, activeRun.particles.length - MAX_PARTICLES);
   }
 }
 
@@ -7353,7 +7447,7 @@ function isHighlightedRankingRecord(record, highlightRecord) {
 
 function getTopGapLabel(record, dateKey) {
   const top = getTodayScores(dateKey)[0];
-  if (!top || isSameScoreSubmission(top, record)) return "";
+  if (!top || record.score >= top.score || isSameScoreSubmission(top, record)) return "";
   const gap = Math.max(1, top.score - record.score + 1);
   return copyText(COPY.rankingText.topGap, { score: formatNumber(gap) });
 }
@@ -7478,6 +7572,7 @@ function updatePlayerProfile(record) {
   const current = loadPlayerProfile();
   const next = {
     lastPlayerName: record.randomName,
+    nameStyle: PROFILE_NAME_STYLE,
     bestScore: Math.max(current.bestScore, record.score),
     totalDeliveries: current.totalDeliveries + record.deliveries,
     totalPlays: current.totalPlays + 1,
@@ -7502,12 +7597,13 @@ function loadPlayerProfile() {
 
 function sanitizePlayerProfile(profile) {
   const lastPlayerName =
-    isValidPlayerName(profile.lastPlayerName)
+    profile.nameStyle === PROFILE_NAME_STYLE && isValidPlayerName(profile.lastPlayerName)
       ? profile.lastPlayerName
       : "";
 
   return {
     lastPlayerName,
+    nameStyle: profile.nameStyle === PROFILE_NAME_STYLE ? PROFILE_NAME_STYLE : "",
     bestScore: sanitizeInteger(profile.bestScore, 0, 9999999),
     totalDeliveries: sanitizeInteger(profile.totalDeliveries, 0, 999999),
     totalPlays: sanitizeInteger(profile.totalPlays, 0, 99999),
@@ -7528,7 +7624,7 @@ function savePlayerName(randomName) {
 
   try {
     const current = loadPlayerProfile();
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...current, lastPlayerName: randomName }));
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...current, lastPlayerName: randomName, nameStyle: PROFILE_NAME_STYLE }));
   } catch {
     // 名前を保存できない環境でも、今回のプレイはそのまま続ける。
   }
@@ -7779,14 +7875,9 @@ function formatJstDateKey(date) {
 
 function getCurrentWeekDateKeys(dateKey) {
   const current = parseJstDateKey(dateKey);
-  const day = current.getUTCDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  const monday = new Date(current);
-  monday.setUTCDate(current.getUTCDate() + mondayOffset);
-
   return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(monday);
-    date.setUTCDate(monday.getUTCDate() + index);
+    const date = new Date(current);
+    date.setUTCDate(current.getUTCDate() - (6 - index));
     return formatJstDateKey(date);
   });
 }
